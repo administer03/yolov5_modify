@@ -175,7 +175,7 @@ class Loggers():
                 if ni == 0 and self.tb and not self.opt.sync_bn:
                     log_tensorboard_graph(self.tb, model, imgsz=(self.opt.imgsz, self.opt.imgsz))
 
-            if (ni > 3) and (ni % 1000 == 0):
+            if (ni > 3) and (ni % 700 == 0):
                 f = self.save_dir / f'train_batch{ni}.jpg'  # filename
                 plot_images(imgs, targets, paths, f)
                 if ni == 0 and self.tb and not self.opt.sync_bn:
