@@ -60,7 +60,6 @@ class YoDa(nn.Module):
         )# n-1
     
     def forward(self, x):
-        print(x.size())
         if self.target_ch == 3:
             x = self.conv1(x)
             x = self.conv2(x)
@@ -127,6 +126,7 @@ class Detect(nn.Module):
         y, x = torch.arange(ny, device=d, dtype=t), torch.arange(nx, device=d, dtype=t)
         yv, xv = torch.meshgrid(y, x, indexing='ij') if torch_1_10 else torch.meshgrid(y, x)  # torch>=0.7 compatibility
         grid = torch.stack((xv, yv), 2).expand(shape) - 0.5  # add grid offset, i.e. y = 2.0 * x - 0.5
+        # print(self.anchors[i].size(), self.stride[i].size(), len(self.stride), len(self.anchors))
         anchor_grid = (self.anchors[i] * self.stride[i]).view((1, self.na, 1, 1, 2)).expand(shape)
         return grid, anchor_grid
 
@@ -153,32 +153,30 @@ class BaseModel(nn.Module):
     def forward(self, x, profile=False, visualize=False):
         return self._forward_once(x, profile, visualize)  # single-scale inference, train
 
-    def _forward_once(self, x, profile=False, visualize=False):
+    def _forward_once(self, x, profile=False, visualize=False, get_deepx=False):
         y, dt = [], []  # outputs
         #########################################################
         # got 7 channels
         # doing befor yolo backbone
-        i = 0
+        if get_deepx:
         # print(x.size())
-        # x = self.YoDa(x)
-        # deep_x = x
+            x = self.YoDa(x)
+            deep_x = x
         #########################################################
         for m in self.model:
             if m.f != -1:  # if not from previous layer
                 x = y[m.f] if isinstance(m.f, int) else [x if j == -1 else y[j] for j in m.f]  # from earlier layers
             if profile:
                 self._profile_one_layer(m, x, dt)
-        #########################################################
-            if i == 0:
-                x = self.YoDa(x)
-                deep_x = x
-                i += 1
-        #########################################################
             x = m(x)  # run
             y.append(x if m.i in self.save else None)  # save output
             if visualize:
                 feature_visualization(x, m.type, m.i, save_dir=visualize)
-        return x, deep_x
+                
+        if get_deepx:
+            return x, deep_x
+        else:
+            return x
 
     def _profile_one_layer(self, m, x, dt):
         c = m == self.model[-1]  # is final layer, copy input as inplace fix
@@ -223,8 +221,8 @@ class DetectionModel(BaseModel):
     def __init__(self, cfg='yolov5s.yaml', ch=3, nc=None, anchors=None):  # model, input channels, number of classes
         super().__init__()
         ###############################################
-        input_ch = 1
-        self.YoDa = YoDa(input_ch) # 1 or 3
+        input_ch = 7
+        tar_ch = 3
         ###############################################
 
         if isinstance(cfg, dict):
@@ -236,10 +234,9 @@ class DetectionModel(BaseModel):
                 self.yaml = yaml.safe_load(f)  # model dict
 
         # Define model
-        # ch = self.yaml['ch'] = self.yaml.get('ch', ch)  # input channels
+        ch = self.yaml['ch'] = self.yaml.get('ch', ch)  # input channels
         ###############################################
-        ch = input_ch
-        tar_ch = 7
+        # ch = tar_ch
         ###############################################
 
         if nc and nc != self.yaml['nc']:
@@ -257,24 +254,26 @@ class DetectionModel(BaseModel):
         if isinstance(m, (Detect, Segment)):
             s = 256  # 2x min stride
             m.inplace = self.inplace
-            forward = lambda x: self.forward(x)[0] if isinstance(m, Segment) else self.forward(x, augment=False)
+            forward = lambda x: self.forward(x, get_deepx=False)[0]
             m.stride = torch.tensor([s / x[0].shape[-2] for x in forward(torch.zeros(1, tar_ch, s, s))])  # forward
             check_anchor_order(m)
             m.anchors /= m.stride.view(-1, 1, 1)
             self.stride = m.stride
             self._initialize_biases()  # only run once
+        
+        self.YoDa = YoDa(tar_ch, ch=input_ch) # 1 or 3
 
         # Init weights, biases
         initialize_weights(self)
         self.info()
         LOGGER.info('')
 
-    def forward(self, x, augment=False, profile=False, visualize=False):
+    def forward(self, x, augment=False, profile=False, visualize=False, get_deepx=False):
         if augment:
-            return self._forward_augment(x)  # augmented inference, None
-        return self._forward_once(x, profile, visualize)  # single-scale inference, train
+            return self._forward_augment(x, get_deepx=get_deepx)  # augmented inference, None
+        return self._forward_once(x, profile, visualize, get_deepx=get_deepx)  # single-scale inference, train
 
-    def _forward_augment(self, x):
+    def _forward_augment(self, x, get_deepx=False):
         img_size = x.shape[-2:]  # height, width
         s = [1, 0.83, 0.67]  # scales
         f = [None, 3, None]  # flips (2-ud, 3-lr)
@@ -282,7 +281,7 @@ class DetectionModel(BaseModel):
         for si, fi in zip(s, f):
             xi = scale_img(x.flip(fi) if fi else x, si, gs=int(self.stride.max()))
             #################################
-            yi, deep_x = self._forward_once(xi)  # forward
+            yi, dx = self._forward_once(xi, get_deepx=True)  # forward
             yi = yi[0]
             #################################
             # cv2.imwrite(f'img_{si}.jpg', 255 * xi[0].cpu().numpy().transpose((1, 2, 0))[:, :, ::-1])  # save

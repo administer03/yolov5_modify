@@ -1,0 +1,5 @@
+nc: 1
+names: ['Globular Cluster']
+train: ./data/Linear/train_raw_110/images
+val: ./data/Linear/val_raw_21/images
+test: ./data/Linear/val_147/images

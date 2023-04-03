@@ -17,6 +17,7 @@ from multiprocessing.pool import Pool, ThreadPool
 from pathlib import Path
 from threading import Thread
 from urllib.parse import urlparse
+from copy import deepcopy
 
 import numpy as np
 import psutil
@@ -588,7 +589,7 @@ class LoadImagesAndLabels(Dataset):
             pbar.close()
 
 #########################################################################################
-    def apply_filter(im, fil):
+    def apply_filter(self, im, fil):
     # Apply particular filter to image
         im = im / 255.
 
@@ -617,10 +618,11 @@ class LoadImagesAndLabels(Dataset):
     def stack_(self, img):
         # Stack images
         list_filter = ["Linear", "Log", "Power", "Sqrt", "Squared", "ASINH", "SINH"]
-        img_7ch = np.zeros((img.shape[0], img.shape[1], 7))
+        img_7ch = np.zeros(shape=(img.shape[0], img.shape[1], 7))
         for i in range(7):
-            cur_img = img.deepcopy()
-            img_7ch[:, :, i] = apply_filter(cur_img, list_filter[i])
+            cur_img = deepcopy(img)
+            filtered_img = self.apply_filter(cur_img, list_filter[i])
+            img_7ch[:, :, i] = filtered_img
         return img_7ch
 #########################################################################################
 
@@ -709,7 +711,8 @@ class LoadImagesAndLabels(Dataset):
             ###############################################################################
             # 1024, 1024, 3 -> 1024, 1024, 1
             img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-            img = stack_(img)
+            img = img.reshape(h, w, 1)
+            # img = self.stack_(img)
             ###############################################################################
 
             # Letterbox
@@ -761,11 +764,13 @@ class LoadImagesAndLabels(Dataset):
         labels_out = torch.zeros((nl, 6))
         if nl:
             labels_out[:, 1:] = torch.from_numpy(labels)
+        
+        img = self.stack_(img) # Stack image
+        # print(img.shape)
 
         # Convert
         img = img.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB
         img = np.ascontiguousarray(img)
-        print(img.shape)
 
         return torch.from_numpy(img), labels_out, self.im_files[index], shapes
 
