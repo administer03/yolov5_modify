@@ -34,6 +34,48 @@ try:
 except ImportError:
     thop = None
 
+##########################################################################
+
+class YoDa(nn.Module):
+    def __init__(self, target_ch, ch=7):
+        super().__init__()
+        self.ch = ch
+        self.target_ch = target_ch
+        self.conv1 = self.cut_channels(ch)
+        self.conv2 = self.cut_channels(ch - 1)
+        self.conv3 = self.cut_channels(ch - 2)
+        self.conv4 = self.cut_channels(ch - 3)
+        # reducing until 1 channel
+        self.conv5 = self.cut_channels(ch - 4)
+        self.conv6 = self.cut_channels(ch - 5)
+
+    def cut_channels(self, inp_channel):
+        return nn.Sequential(
+            nn.Conv2d(inp_channel, inp_channel, 1),
+            nn.BatchNorm2d(inp_channel),
+            nn.SiLU(),
+            nn.Conv2d(inp_channel, inp_channel - 1, 1),
+            nn.BatchNorm2d(inp_channel-1),
+            nn.SiLU(),
+        )# n-1
+    
+    def forward(self, x):
+        print(x.size())
+        if self.target_ch == 3:
+            x = self.conv1(x)
+            x = self.conv2(x)
+            x = self.conv3(x)
+            x = self.conv4(x)
+        else:
+            x = self.conv1(x)
+            x = self.conv2(x)
+            x = self.conv3(x)
+            x = self.conv4(x)
+            x = self.conv5(x)
+            x = self.conv6(x)
+        return x
+
+##########################################################################
 
 class Detect(nn.Module):
     # YOLOv5 Detect head for detection models
@@ -113,16 +155,30 @@ class BaseModel(nn.Module):
 
     def _forward_once(self, x, profile=False, visualize=False):
         y, dt = [], []  # outputs
+        #########################################################
+        # got 7 channels
+        # doing befor yolo backbone
+        i = 0
+        # print(x.size())
+        # x = self.YoDa(x)
+        # deep_x = x
+        #########################################################
         for m in self.model:
             if m.f != -1:  # if not from previous layer
                 x = y[m.f] if isinstance(m.f, int) else [x if j == -1 else y[j] for j in m.f]  # from earlier layers
             if profile:
                 self._profile_one_layer(m, x, dt)
+        #########################################################
+            if i == 0:
+                x = self.YoDa(x)
+                deep_x = x
+                i += 1
+        #########################################################
             x = m(x)  # run
             y.append(x if m.i in self.save else None)  # save output
             if visualize:
                 feature_visualization(x, m.type, m.i, save_dir=visualize)
-        return x
+        return x, deep_x
 
     def _profile_one_layer(self, m, x, dt):
         c = m == self.model[-1]  # is final layer, copy input as inplace fix
@@ -166,6 +222,11 @@ class DetectionModel(BaseModel):
     # YOLOv5 detection model
     def __init__(self, cfg='yolov5s.yaml', ch=3, nc=None, anchors=None):  # model, input channels, number of classes
         super().__init__()
+        ###############################################
+        input_ch = 1
+        self.YoDa = YoDa(input_ch) # 1 or 3
+        ###############################################
+
         if isinstance(cfg, dict):
             self.yaml = cfg  # model dict
         else:  # is *.yaml
@@ -175,7 +236,12 @@ class DetectionModel(BaseModel):
                 self.yaml = yaml.safe_load(f)  # model dict
 
         # Define model
-        ch = self.yaml['ch'] = self.yaml.get('ch', ch)  # input channels
+        # ch = self.yaml['ch'] = self.yaml.get('ch', ch)  # input channels
+        ###############################################
+        ch = input_ch
+        tar_ch = 7
+        ###############################################
+
         if nc and nc != self.yaml['nc']:
             LOGGER.info(f"Overriding model.yaml nc={self.yaml['nc']} with nc={nc}")
             self.yaml['nc'] = nc  # override yaml value
@@ -191,8 +257,8 @@ class DetectionModel(BaseModel):
         if isinstance(m, (Detect, Segment)):
             s = 256  # 2x min stride
             m.inplace = self.inplace
-            forward = lambda x: self.forward(x)[0] if isinstance(m, Segment) else self.forward(x)
-            m.stride = torch.tensor([s / x.shape[-2] for x in forward(torch.zeros(1, ch, s, s))])  # forward
+            forward = lambda x: self.forward(x)[0] if isinstance(m, Segment) else self.forward(x, augment=False)
+            m.stride = torch.tensor([s / x[0].shape[-2] for x in forward(torch.zeros(1, tar_ch, s, s))])  # forward
             check_anchor_order(m)
             m.anchors /= m.stride.view(-1, 1, 1)
             self.stride = m.stride
@@ -215,7 +281,10 @@ class DetectionModel(BaseModel):
         y = []  # outputs
         for si, fi in zip(s, f):
             xi = scale_img(x.flip(fi) if fi else x, si, gs=int(self.stride.max()))
-            yi = self._forward_once(xi)[0]  # forward
+            #################################
+            yi, deep_x = self._forward_once(xi)  # forward
+            yi = yi[0]
+            #################################
             # cv2.imwrite(f'img_{si}.jpg', 255 * xi[0].cpu().numpy().transpose((1, 2, 0))[:, :, ::-1])  # save
             yi = self._descale_pred(yi, fi, si, img_size)
             y.append(yi)

@@ -169,7 +169,10 @@ class ComputeLoss:
             self.balance = [x / self.balance[self.ssi] for x in self.balance]
         lbox *= self.hyp['box']
         lobj *= self.hyp['obj']
-        lcls *= self.hyp['cls']
+        ###############################################
+        # lcls *= self.hyp['cls']
+        lcls *= 0 # ignore class loss
+        ###############################################
         bs = tobj.shape[0]  # batch size
 
         return (lbox + lobj + lcls) * bs, torch.cat((lbox, lobj, lcls)).detach()

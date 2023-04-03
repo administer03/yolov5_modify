@@ -587,6 +587,43 @@ class LoadImagesAndLabels(Dataset):
                 pbar.desc = f'{prefix}Caching images ({b / gb:.1f}GB {cache_images})'
             pbar.close()
 
+#########################################################################################
+    def apply_filter(im, fil):
+    # Apply particular filter to image
+        im = im / 255.
+
+        filter_name = fil
+
+        if filter_name == "Linear":
+            im = im
+        elif filter_name == "Log":
+            im = (np.log(1000 * im + 1)) / (np.log(1000))
+        elif filter_name == "Power":
+            im = (np.power(1000, im) - 1) / 1000
+        elif filter_name == "Sqrt":
+            im = np.sqrt(im)
+        elif filter_name == "Squared":
+            im = np.square(im)
+        elif filter_name == "ASINH":
+            im = (np.arcsinh(10*im)) / 3
+        elif filter_name == "SINH":
+            im = (np.sinh(10*im)) / 3
+        else:
+            raise
+
+        im = np.interp(im, (im.min(), im.max()), (0, 255))
+        return im
+
+    def stack_(self, img):
+        # Stack images
+        list_filter = ["Linear", "Log", "Power", "Sqrt", "Squared", "ASINH", "SINH"]
+        img_7ch = np.zeros((img.shape[0], img.shape[1], 7))
+        for i in range(7):
+            cur_img = img.deepcopy()
+            img_7ch[:, :, i] = apply_filter(cur_img, list_filter[i])
+        return img_7ch
+#########################################################################################
+
     def check_cache_ram(self, safety_margin=0.1, prefix=''):
         # Check image caching requirements vs available memory
         b, gb = 0, 1 << 30  # bytes of cached images, bytes per gigabytes
@@ -669,6 +706,12 @@ class LoadImagesAndLabels(Dataset):
             # Load image
             img, (h0, w0), (h, w) = self.load_image(index)
 
+            ###############################################################################
+            # 1024, 1024, 3 -> 1024, 1024, 1
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            img = stack_(img)
+            ###############################################################################
+
             # Letterbox
             shape = self.batch_shapes[self.batch[index]] if self.rect else self.img_size  # final letterboxed shape
             img, ratio, pad = letterbox(img, shape, auto=False, scaleup=self.augment)
@@ -722,6 +765,7 @@ class LoadImagesAndLabels(Dataset):
         # Convert
         img = img.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB
         img = np.ascontiguousarray(img)
+        print(img.shape)
 
         return torch.from_numpy(img), labels_out, self.im_files[index], shapes
 
