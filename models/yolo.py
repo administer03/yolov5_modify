@@ -222,7 +222,7 @@ class DetectionModel(BaseModel):
         super().__init__()
         ###############################################
         input_ch = 7
-        tar_ch = 3
+        tar_ch = 1
         ###############################################
 
         if isinstance(cfg, dict):
@@ -234,9 +234,9 @@ class DetectionModel(BaseModel):
                 self.yaml = yaml.safe_load(f)  # model dict
 
         # Define model
-        ch = self.yaml['ch'] = self.yaml.get('ch', ch)  # input channels
+        # ch = self.yaml['ch'] = self.yaml.get('ch', ch)  # input channels
         ###############################################
-        # ch = tar_ch
+        ch = tar_ch
         ###############################################
 
         if nc and nc != self.yaml['nc']:
