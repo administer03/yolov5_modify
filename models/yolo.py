@@ -35,21 +35,22 @@ except ImportError:
     thop = None
 
 ##########################################################################
+# Defination the structure
 
 class YoDa(nn.Module):
     def __init__(self, target_ch, ch=7):
         super().__init__()
         self.ch = ch
         self.target_ch = target_ch
-        self.conv1 = self.cut_channels(ch)
-        self.conv2 = self.cut_channels(ch - 1)
-        self.conv3 = self.cut_channels(ch - 2)
-        self.conv4 = self.cut_channels(ch - 3)
+        self.conv1 = self.reducing_channel(ch)
+        self.conv2 = self.reducing_channel(ch - 1)
+        self.conv3 = self.reducing_channel(ch - 2)
+        self.conv4 = self.reducing_channel(ch - 3)
         # reducing until 1 channel
-        self.conv5 = self.cut_channels(ch - 4)
-        self.conv6 = self.cut_channels(ch - 5)
+        self.conv5 = self.reducing_channel(ch - 4)
+        self.conv6 = self.reducing_channel(ch - 5)
 
-    def cut_channels(self, inp_channel):
+    def reducing_channel(self, inp_channel):
         return nn.Sequential(
             nn.Conv2d(inp_channel, inp_channel, 1),
             nn.BatchNorm2d(inp_channel),
@@ -153,15 +154,15 @@ class BaseModel(nn.Module):
     def forward(self, x, profile=False, visualize=False):
         return self._forward_once(x, profile, visualize)  # single-scale inference, train
 
-    def _forward_once(self, x, profile=False, visualize=False, get_deepx=False):
+    def _forward_once(self, x, profile=False, visualize=False, get_dcp_img=False):
         y, dt = [], []  # outputs
         #########################################################
-        # got 7 channels
-        # doing befor yolo backbone
-        if get_deepx:
-        # print(x.size())
+        # Doing befor yolo backbone
+        if get_dcp_img:
             x = self.YoDa(x)
-            deep_x = x
+            # The dcp_obj is image, that preprocessed by CNN layer
+            # Input from stacking (w, h, 7) --> (w, h, 1)
+            dcp_obj = x
         #########################################################
         for m in self.model:
             if m.f != -1:  # if not from previous layer
@@ -172,11 +173,14 @@ class BaseModel(nn.Module):
             y.append(x if m.i in self.save else None)  # save output
             if visualize:
                 feature_visualization(x, m.type, m.i, save_dir=visualize)
-                
-        if get_deepx:
-            return x, deep_x
+        
+        #########################################################
+        # Doing befor yolo backbone
+        if get_dcp_img:
+            return x, dcp_obj
         else:
             return x
+        #########################################################
 
     def _profile_one_layer(self, m, x, dt):
         c = m == self.model[-1]  # is final layer, copy input as inplace fix
@@ -222,7 +226,7 @@ class DetectionModel(BaseModel):
         super().__init__()
         ###############################################
         input_ch = 7
-        tar_ch = 1
+        target_ch = 1
         ###############################################
 
         if isinstance(cfg, dict):
@@ -234,9 +238,9 @@ class DetectionModel(BaseModel):
                 self.yaml = yaml.safe_load(f)  # model dict
 
         # Define model
-        # ch = self.yaml['ch'] = self.yaml.get('ch', ch)  # input channels
         ###############################################
-        ch = tar_ch
+        # ch = self.yaml['ch'] = self.yaml.get('ch', ch)  # input channels
+        ch = target_ch
         ###############################################
 
         if nc and nc != self.yaml['nc']:
@@ -254,36 +258,39 @@ class DetectionModel(BaseModel):
         if isinstance(m, (Detect, Segment)):
             s = 256  # 2x min stride
             m.inplace = self.inplace
-            forward = lambda x: self.forward(x, get_deepx=False)[0] if isinstance(m, Segment) else self.forward(x, get_deepx=False)
-            m.stride = torch.tensor([s / x.shape[-2] for x in forward(torch.zeros(1, tar_ch, s, s))])  # forward
+            forward = lambda x: self.forward(x, get_dcp_img=False)[0] if isinstance(m, Segment) else self.forward(x, get_dcp_img=False)
+            m.stride = torch.tensor([s / x.shape[-2] for x in forward(torch.zeros(1, target_ch, s, s))])  # forward
             check_anchor_order(m)
             m.anchors /= m.stride.view(-1, 1, 1)
             self.stride = m.stride
             self._initialize_biases()  # only run once
         
-        self.YoDa = YoDa(tar_ch, ch=input_ch) # 1 or 3
+        ####################################################
+        # Initial the model
+        self.YoDa = YoDa(target_ch, ch=input_ch) # 1 or 3
+        ####################################################
 
         # Init weights, biases
         initialize_weights(self)
         self.info()
         LOGGER.info('')
 
-    def forward(self, x, augment=False, profile=False, visualize=False, get_deepx=False):
+    def forward(self, x, augment=False, profile=False, visualize=False, get_dcp_img=False):
         if augment:
-            return self._forward_augment(x, get_deepx=get_deepx)  # augmented inference, None
-        return self._forward_once(x, profile, visualize, get_deepx=get_deepx)  # single-scale inference, train
+            return self._forward_augment(x, get_dcp_img=get_dcp_img)  # augmented inference, None
+        return self._forward_once(x, profile, visualize, get_dcp_img=get_dcp_img)  # single-scale inference, train
 
-    def _forward_augment(self, x, get_deepx=False):
+    def _forward_augment(self, x, get_dcp_img=False):
         img_size = x.shape[-2:]  # height, width
         s = [1, 0.83, 0.67]  # scales
         f = [None, 3, None]  # flips (2-ud, 3-lr)
         y = []  # outputs
         for si, fi in zip(s, f):
             xi = scale_img(x.flip(fi) if fi else x, si, gs=int(self.stride.max()))
-            #################################
-            yi, dx = self._forward_once(xi, get_deepx=get_deepx)  # forward
+            ###################################################################################################
+            yi, dx = self._forward_once(xi, get_dcp_img=get_dcp_img)  # forward
             yi = yi[0]
-            #################################
+            ###################################################################################################
             # cv2.imwrite(f'img_{si}.jpg', 255 * xi[0].cpu().numpy().transpose((1, 2, 0))[:, :, ::-1])  # save
             yi = self._descale_pred(yi, fi, si, img_size)
             y.append(yi)

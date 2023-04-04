@@ -310,9 +310,9 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
 
             # Forward
             with torch.cuda.amp.autocast(amp):
-                ################################################
+                ################################################################################################
                 pred, deep_x = model(imgs, get_deepx=True)  # forward
-                ################################################
+                ################################################################################################
                 loss, loss_items = compute_loss(pred, targets.to(device))  # loss scaled by batch_size
                 if RANK != -1:
                     loss *= WORLD_SIZE  # gradient averaged between devices in DDP mode
@@ -446,6 +446,10 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
 
 def parse_opt(known=False):
     parser = argparse.ArgumentParser()
+    #######################################################################################################################
+    parser.add_argument('--input-ch', type=int, default=7, help='input channels for CNN processing (multiview-extraction)')
+    parser.add_argument('--target-ch', type=int, default=3, help='target channels, that represent the input data for Yolo')
+    #######################################################################################################################
     parser.add_argument('--weights', type=str, default=ROOT / 'yolov5n.pt', help='initial weights path')
     parser.add_argument('--cfg', type=str, default='', help='model.yaml path')
     parser.add_argument('--data', type=str, default=ROOT / 'data/data_110.yaml', help='dataset.yaml path')
