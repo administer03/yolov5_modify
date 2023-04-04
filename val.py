@@ -207,7 +207,7 @@ def run(
 
         # Inference
         with dt[1]:
-            (preds, train_out), _ = model(im, get_deepx=True) if compute_loss else (model(im, augment=augment, get_deepx=True), None)
+            (preds, train_out), _ = model(im, get_dcp_img=True) if compute_loss else (model(im, augment=augment, get_dcp_img=True), None)
 
         # Loss
         if compute_loss:

@@ -72,7 +72,7 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
         Path(opt.save_dir), opt.epochs, opt.batch_size, opt.weights, opt.single_cls, opt.evolve, opt.data, opt.cfg, \
         opt.resume, opt.noval, opt.nosave, opt.workers, opt.freeze
     callbacks.run('on_pretrain_routine_start')
-
+    
     # Directories
     w = save_dir / 'weights'  # weights dir
     (w.parent if evolve else w).mkdir(parents=True, exist_ok=True)  # make dir
@@ -118,21 +118,28 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
     # Model
     check_suffix(weights, '.pt')  # check weights
     pretrained = weights.endswith('.pt')
+    ###################################################################################
+    input_channels = opt.input_ch
+    output_channels = opt.target_ch
+    ###################################################################################
     if pretrained:
         with torch_distributed_zero_first(LOCAL_RANK):
             weights = attempt_download(weights)  # download if not found locally
         ckpt = torch.load(weights, map_location='cpu')  # load checkpoint to CPU to avoid CUDA memory leak
-        model = Model(cfg or ckpt['model'].yaml, ch=3, nc=nc, anchors=hyp.get('anchors')).to(device)  # create
+        ######################################################################################################################################
+        # Changing the channels (input & output) variable
+        model = Model(cfg or ckpt['model'].yaml, in_ch=input_channels, tar_ch = output_channels, nc=nc, anchors=hyp.get('anchors')).to(device)  # create
+        ######################################################################################################################################
         exclude = ['anchor'] if (cfg or hyp.get('anchors')) and not resume else []  # exclude keys
         csd = ckpt['model'].float().state_dict()  # checkpoint state_dict as FP32
         csd = intersect_dicts(csd, model.state_dict(), exclude=exclude)  # intersect
         model.load_state_dict(csd, strict=False)  # load
         LOGGER.info(f'Transferred {len(csd)}/{len(model.state_dict())} items from {weights}')  # report
     else:
-        ###################################################################################
-        channels = 1
-        ###################################################################################
-        model = Model(cfg, ch=channels, nc=nc, anchors=hyp.get('anchors')).to(device)  # create
+        ################################################################################################################
+        # Changing the channels (input & output) variable
+        model = Model(cfg, in_ch=input_channels, tar_ch = output_channels, nc=nc, anchors=hyp.get('anchors')).to(device)  # create
+        ################################################################################################################
     amp = check_amp(model)  # check AMP
 
     # Freeze
@@ -311,7 +318,7 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
             # Forward
             with torch.cuda.amp.autocast(amp):
                 ################################################################################################
-                pred, deep_x = model(imgs, get_deepx=True)  # forward
+                pred, dcp_obj = model(imgs, get_dcp_img=True)  # forward
                 ################################################################################################
                 loss, loss_items = compute_loss(pred, targets.to(device))  # loss scaled by batch_size
                 if RANK != -1:
@@ -339,7 +346,7 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
                 mem = f'{torch.cuda.memory_reserved() / 1E9 if torch.cuda.is_available() else 0:.3g}G'  # (GB)
                 ########################################################################################################
                 # for specific input -> display
-                decoded_ims_plot = deepcopy(deep_x.cpu().detach().numpy())
+                decoded_ims_plot = deepcopy(dcp_obj.cpu().detach().numpy())
                 pbar.set_description(('%11s' * 2 + '%11.4g' * 5) %
                                      (f'{epoch}/{epochs - 1}', mem, *mloss, targets.shape[0], imgs.shape[-1]))
                 filter_to_plot = 7

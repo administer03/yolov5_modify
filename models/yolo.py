@@ -38,17 +38,17 @@ except ImportError:
 # Defination the structure
 
 class YoDa(nn.Module):
-    def __init__(self, target_ch, ch=7):
+    def __init__(self, input_ch, target_ch):
         super().__init__()
-        self.ch = ch
+        self.input_ch = input_ch
         self.target_ch = target_ch
-        self.conv1 = self.reducing_channel(ch)
-        self.conv2 = self.reducing_channel(ch - 1)
-        self.conv3 = self.reducing_channel(ch - 2)
-        self.conv4 = self.reducing_channel(ch - 3)
+        self.conv1 = self.reducing_channel(self.input_ch)
+        self.conv2 = self.reducing_channel(self.input_ch - 1)
+        self.conv3 = self.reducing_channel(self.input_ch - 2)
+        self.conv4 = self.reducing_channel(self.input_ch - 3)
         # reducing until 1 channel
-        self.conv5 = self.reducing_channel(ch - 4)
-        self.conv6 = self.reducing_channel(ch - 5)
+        self.conv5 = self.reducing_channel(self.input_ch - 4)
+        self.conv6 = self.reducing_channel(self.input_ch - 5)
 
     def reducing_channel(self, inp_channel):
         return nn.Sequential(
@@ -62,11 +62,13 @@ class YoDa(nn.Module):
     
     def forward(self, x):
         if self.target_ch == 3:
+            print(" **running on CNN ({}ch target!)\n".format(self.target_ch))
             x = self.conv1(x)
             x = self.conv2(x)
             x = self.conv3(x)
             x = self.conv4(x)
         else:
+            print(" **running on CNN ({}ch target!)\n".format(self.target_ch))
             x = self.conv1(x)
             x = self.conv2(x)
             x = self.conv3(x)
@@ -222,11 +224,11 @@ class BaseModel(nn.Module):
 
 class DetectionModel(BaseModel):
     # YOLOv5 detection model
-    def __init__(self, cfg='yolov5s.yaml', ch=3, nc=None, anchors=None):  # model, input channels, number of classes
+    def __init__(self, cfg='yolov5s.yaml', in_ch=None, tar_ch=None, nc=None, anchors=None):  # model, input channels, number of classes
         super().__init__()
         ###############################################
-        input_ch = 7
-        target_ch = 1
+        input_ch = in_ch
+        target_ch = tar_ch
         ###############################################
 
         if isinstance(cfg, dict):
@@ -265,10 +267,11 @@ class DetectionModel(BaseModel):
             self.stride = m.stride
             self._initialize_biases()  # only run once
         
-        ####################################################
+        #############################################################################################################################
+        print("\n******************\ninput_ch_CNN : {}\ninput_ch_Yolo : {}\n******************\n".format(input_ch, target_ch))
         # Initial the model
-        self.YoDa = YoDa(target_ch, ch=input_ch) # 1 or 3
-        ####################################################
+        self.YoDa = YoDa(input_ch, target_ch) # 1 or 3
+        #############################################################################################################################
 
         # Init weights, biases
         initialize_weights(self)
