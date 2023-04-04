@@ -617,12 +617,14 @@ class LoadImagesAndLabels(Dataset):
 
     def stack_(self, img):
         # Stack images
-        list_filter = ["Linear", "Log", "Power", "Sqrt", "Squared", "ASINH", "SINH"]
+        list_filter = ["Log", "Power", "Sqrt", "Squared", "ASINH", "SINH"]
         img_7ch = np.zeros(shape=(img.shape[0], img.shape[1], 7))
-        for i in range(7):
+        img_7ch[:, :, 0] = img  # Linear
+        
+        for i in range(len(list_filter)):
             cur_img = deepcopy(img)
             filtered_img = self.apply_filter(cur_img, list_filter[i])
-            img_7ch[:, :, i] = filtered_img
+            img_7ch[:, :, i+1] = filtered_img
         return img_7ch
 #########################################################################################
 
@@ -739,11 +741,11 @@ class LoadImagesAndLabels(Dataset):
 
         if self.augment:
             # Albumentations
-            img, labels = self.albumentations(img, labels)
-            nl = len(labels)  # update after albumentations
+            # img, labels = self.albumentations(img, labels)
+            # nl = len(labels)  # update after albumentations
 
-            # HSV color-space
-            augment_hsv(img, hgain=hyp['hsv_h'], sgain=hyp['hsv_s'], vgain=hyp['hsv_v'])
+            # # HSV color-space
+            # augment_hsv(img, hgain=hyp['hsv_h'], sgain=hyp['hsv_s'], vgain=hyp['hsv_v'])
 
             # Flip up-down
             if random.random() < hyp['flipud']:
