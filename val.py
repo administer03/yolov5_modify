@@ -18,6 +18,7 @@ Usage - formats:
                               yolov5s_edgetpu.tflite     # TensorFlow Edge TPU
                               yolov5s_paddle_model       # PaddlePaddle
 """
+from copy import deepcopy
 
 import argparse
 import json
@@ -204,10 +205,15 @@ def run(
             im = im.half() if half else im.float()  # uint8 to fp16/32
             im /= 255  # 0 - 255 to 0.0 - 1.0
             nb, _, height, width = im.shape  # batch size, channels, height, width
+            # print(im.shape) --> torch.Size([8, 7, 96, 96])
 
         # Inference
         with dt[1]:
-            (preds, train_out), _ = model(im, get_dcp_img=True) if compute_loss else (model(im, augment=augment, get_dcp_img=True), None)
+            #######################################################################################################################################
+            (preds, train_out), transformed_img = model(im, get_dcp_img=True) if compute_loss else (model(im, augment=augment, get_dcp_img=True), None)
+            # transformed_img is the image that was calculated by CNN layers, ie. ch 7 --> ch 3
+            transformed_img = deepcopy(transformed_img.cpu().detach().numpy())
+            #######################################################################################################################################
 
         # Loss
         if compute_loss:
@@ -266,9 +272,13 @@ def run(
         # Plot images
         if plots and batch_i < 3:
         #################################################################################################################################
-        # specific channels of image for display
-            plot_images(im[:, 0:1, :, :], targets, paths, save_dir / f'val_batch{batch_i}_labels.jpg', names)  # labels
-            plot_images(im[:, 0:1, :, :], output_to_target(preds), paths, save_dir / f'val_batch{batch_i}_pred.jpg', names)  # pred
+            # display with target channels from the CNN
+            plot_images(transformed_img, targets, paths, save_dir / f'val_batch{batch_i}_labels.jpg', names)  # labels
+            plot_images(transformed_img, output_to_target(preds), paths, save_dir / f'val_batch{batch_i}_pred.jpg', names)  # pred
+
+            # specific channels of image for display
+            # plot_images(im[:, 0:1, :, :], targets, paths, save_dir / f'val_batch{batch_i}_labels.jpg', names)  # labels
+            # plot_images(im[:, 0:1, :, :], output_to_target(preds), paths, save_dir / f'val_batch{batch_i}_pred.jpg', names)  # pred
         #################################################################################################################################
 
         callbacks.run('on_val_batch_end', batch_i, im, targets, paths, shapes, preds)

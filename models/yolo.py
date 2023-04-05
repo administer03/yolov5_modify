@@ -42,13 +42,13 @@ class YoDa(nn.Module):
         super().__init__()
         self.input_ch = input_ch
         self.target_ch = target_ch
-        self.conv1 = self.reducing_channel(self.input_ch)
-        self.conv2 = self.reducing_channel(self.input_ch - 1)
-        self.conv3 = self.reducing_channel(self.input_ch - 2)
-        self.conv4 = self.reducing_channel(self.input_ch - 3)
+        self.conv1 = self.reducing_channel(self.input_ch) # 7
+        self.conv2 = self.reducing_channel(self.input_ch - 1) # 6
+        self.conv3 = self.reducing_channel(self.input_ch - 2) # 5
+        self.conv4 = self.reducing_channel(self.input_ch - 3) # 4
         # reducing until 1 channel
-        self.conv5 = self.reducing_channel(self.input_ch - 4)
-        self.conv6 = self.reducing_channel(self.input_ch - 5)
+        self.conv5 = self.reducing_channel(self.input_ch - 4) # 3
+        self.conv6 = self.reducing_channel(self.input_ch - 5) # 2
 
     def reducing_channel(self, inp_channel):
         return nn.Sequential(
@@ -58,7 +58,7 @@ class YoDa(nn.Module):
             nn.Conv2d(inp_channel, inp_channel - 1, 1),
             nn.BatchNorm2d(inp_channel-1),
             nn.SiLU(),
-        )# n-1
+        ) # 1
     
     def forward(self, x):
         if self.target_ch == 3:
@@ -67,7 +67,7 @@ class YoDa(nn.Module):
             x = self.conv2(x)
             x = self.conv3(x)
             x = self.conv4(x)
-        else:
+        elif self.target_ch == 1:
             print(" **running on CNN ({}ch target!)\n".format(self.target_ch))
             x = self.conv1(x)
             x = self.conv2(x)
@@ -75,6 +75,8 @@ class YoDa(nn.Module):
             x = self.conv4(x)
             x = self.conv5(x)
             x = self.conv6(x)
+        else:
+            pass
         return x
 
 ##########################################################################
