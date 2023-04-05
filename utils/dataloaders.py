@@ -117,7 +117,11 @@ def create_dataloader(path,
                       quad=False,
                       prefix='',
                       shuffle=False,
-                      seed=0):
+                      seed=0,
+                      ################
+                      sp_filters=None,
+                      ################
+                      ):
     if rect and shuffle:
         LOGGER.warning('WARNING ⚠️ --rect is incompatible with DataLoader shuffle, setting shuffle=False')
         shuffle = False
@@ -134,7 +138,11 @@ def create_dataloader(path,
             stride=int(stride),
             pad=pad,
             image_weights=image_weights,
-            prefix=prefix)
+            prefix=prefix,
+            ######################
+            sp_filters=sp_filters,
+            ######################
+            )
 
     batch_size = min(batch_size, len(dataset))
     nd = torch.cuda.device_count()  # number of CUDA devices
@@ -450,7 +458,11 @@ class LoadImagesAndLabels(Dataset):
                  stride=32,
                  pad=0.0,
                  min_items=0,
-                 prefix=''):
+                 prefix='',
+                 ################
+                 sp_filters=None,
+                 ################
+                 ):
         self.img_size = img_size
         self.augment = augment
         self.hyp = hyp
@@ -461,6 +473,9 @@ class LoadImagesAndLabels(Dataset):
         self.stride = stride
         self.path = path
         self.albumentations = Albumentations(size=img_size) if augment else None
+        ############################
+        self.sp_filters = sp_filters
+        ############################
 
         try:
             f = []  # image files
@@ -620,12 +635,31 @@ class LoadImagesAndLabels(Dataset):
         list_filter = ["Log", "Power", "Sqrt", "Squared", "ASINH", "SINH"]
         img_7ch = np.zeros(shape=(img.shape[0], img.shape[1], 7))
         img_7ch[:, :, 0] = img  # Linear
-        
+        linear_img = deepcopy(img)
         for i in range(len(list_filter)):
-            cur_img = deepcopy(img)
-            filtered_img = self.apply_filter(cur_img, list_filter[i])
+            filtered_img = self.apply_filter(linear_img, list_filter[i])
             img_7ch[:, :, i+1] = filtered_img
         return img_7ch
+
+    def relative_stack(self, img):
+        pair_index = self.sp_filters
+        if pair_index == 1:
+            list_filter = ["Linear", "Sqrt", "Squared"]
+        elif pair_index == 2:
+            list_filter = ["Log", "ASINH", "Sqrt"]
+        elif pair_index == 3:
+            list_filter = ["Power", "SINH", "Squared"]
+
+        img_ch = np.zeros(shape=(img.shape[0], img.shape[1], len(list_filter)))
+        linear_img = deepcopy(img)
+        for i in range(len(list_filter)):
+            if list_filter[i] == "Linear":
+                img_ch[:, :, i] = img
+            else:
+                filtered_img = self.apply_filter(linear_img, list_filter[i])
+                img_ch[:, :, i] = filtered_img
+        return img_ch
+    
 #########################################################################################
 
     def check_cache_ram(self, safety_margin=0.1, prefix=''):
@@ -711,10 +745,9 @@ class LoadImagesAndLabels(Dataset):
             img, (h0, w0), (h, w) = self.load_image(index)
 
             ###############################################################################
-            # 1024, 1024, 3 -> 1024, 1024, 1
+            # h, w, 3 -> h, w, 1
             img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             img = img.reshape(h, w, 1)
-            # img = self.stack_(img)
             ###############################################################################
 
             # Letterbox
@@ -767,8 +800,13 @@ class LoadImagesAndLabels(Dataset):
         if nl:
             labels_out[:, 1:] = torch.from_numpy(labels)
         
-        img = self.stack_(img) # Stack image
+        #####################################################################################
+        if self.sp_filters > 0:
+            img = self.relative_stack(img)
+        else:
+            img = self.stack_(img) # Stack image
         # print(img.shape)
+        #####################################################################################
 
         # Convert
         img = img.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB

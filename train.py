@@ -210,7 +210,11 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
                                               quad=opt.quad,
                                               prefix=colorstr('train: '),
                                               shuffle=True,
-                                              seed=opt.seed)
+                                              seed=opt.seed,
+                                              ##########################
+                                              sp_filters=opt.sp_filters,
+                                              ##########################
+                                              )
     labels = np.concatenate(dataset.labels, 0)
     mlc = int(labels[:, 0].max())  # max label class
     assert mlc < nc, f'Label class {mlc} exceeds nc={nc} in {data}. Possible class labels are 0-{nc - 1}'
@@ -228,7 +232,11 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
                                        rank=-1,
                                        workers=workers * 2,
                                        pad=0.5,
-                                       prefix=colorstr('val: '))[0]
+                                       prefix=colorstr('val: '),
+                                       ##########################
+                                       sp_filters=opt.sp_filters,
+                                       ##########################
+                                       )[0]
 
         if not resume:
             if not opt.noautoanchor:
@@ -353,8 +361,8 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
                                      (f'{epoch}/{epochs - 1}', mem, *mloss, targets.shape[0], imgs.shape[-1]))
                 
                 # incase specific target channels
-                if transformed_img.shape[1] != 1 or transformed_img.shape[1] != 3:
-                    print("\nWrong Target Channels, See more infomation in train.py\n")
+                if transformed_img.shape[1] != 1 and transformed_img.shape[1] != 3:
+                    print("\nWrong Target Channels, See more infomation in train.py (365)\n")
 
                 callbacks.run('on_train_batch_end', model, ni, transformed_img, targets, paths, list(mloss))
                 ########################################################################################################
@@ -460,6 +468,9 @@ def parse_opt(known=False):
     #######################################################################################################################
     parser.add_argument('--input-ch', type=int, default=7, help='input channels for CNN processing (multiview-extraction)')
     parser.add_argument('--target-ch', type=int, default=3, help='target channels, that represent the input data for Yolo')
+    parser.add_argument('--sp-filters', type=int, default=0, help='0 means does not use a specific filter\
+                        1 means use a ["Linear", "Sqrt", "Squared"], 2 means use a ["Log", "ASINH", "Sqrt"]\
+                        and 3 means use a ["Power", "SINH", "Squared"]')
     #######################################################################################################################
     parser.add_argument('--weights', type=str, default=ROOT / 'yolov5n.pt', help='initial weights path')
     parser.add_argument('--cfg', type=str, default='', help='model.yaml path')
@@ -550,6 +561,23 @@ def main(opt, callbacks=Callbacks()):
         torch.cuda.set_device(LOCAL_RANK)
         device = torch.device('cuda', LOCAL_RANK)
         dist.init_process_group(backend='nccl' if dist.is_nccl_available() else 'gloo')
+
+    ################################################################
+    print("\n***********************************************\
+          \ninput_ch_CNN : {}\ninput_ch_Yolo : {}\
+          \n".format(opt.input_ch, opt.target_ch))
+    if opt.sp_filters > 1:
+        print("Now procesing in specific stack filters!!!\n")
+
+    if opt.sp_filters == 1:
+        list_filter = ["Linear", "Sqrt", "Squared"]
+    elif opt.sp_filters == 2:
+        list_filter = ["Log", "ASINH", "Sqrt"]
+    elif opt.sp_filters == 3:
+        list_filter = ["Power", "SINH", "Squared"]
+    print("Special Filters : {}".format(list_filter))
+    print("***********************************************")
+    ################################################################
 
     # Train
     if not opt.evolve:
@@ -651,7 +679,23 @@ def main(opt, callbacks=Callbacks()):
         LOGGER.info(f'Hyperparameter evolution finished {opt.evolve} generations\n'
                     f"Results saved to {colorstr('bold', save_dir)}\n"
                     f'Usage example: $ python train.py --hyp {evolve_yaml}')
+    
+    ################################################################
+    print("\n***********************************************\
+          \ninput_ch_CNN : {}\ninput_ch_Yolo : {}\
+          \n".format(opt.input_ch, opt.target_ch))
+    if opt.sp_filters > 1:
+        print("Processed with specific stack filters!!!\n")
 
+    if opt.sp_filters == 1:
+        list_filter = ["Linear", "Sqrt", "Squared"]
+    elif opt.sp_filters == 2:
+        list_filter = ["Log", "ASINH", "Sqrt"]
+    elif opt.sp_filters == 3:
+        list_filter = ["Power", "SINH", "Squared"]
+    print("Special Filters : {}".format(list_filter))
+    print("***********************************************")
+    ################################################################
 
 def run(**kwargs):
     # Usage: import train; train.run(data='coco128.yaml', imgsz=320, weights='yolov5m.pt')

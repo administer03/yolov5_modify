@@ -42,13 +42,17 @@ class YoDa(nn.Module):
         super().__init__()
         self.input_ch = input_ch
         self.target_ch = target_ch
-        self.conv1 = self.reducing_channel(self.input_ch) # 7
-        self.conv2 = self.reducing_channel(self.input_ch - 1) # 6
-        self.conv3 = self.reducing_channel(self.input_ch - 2) # 5
-        self.conv4 = self.reducing_channel(self.input_ch - 3) # 4
-        # reducing until 1 channel
-        self.conv5 = self.reducing_channel(self.input_ch - 4) # 3
-        self.conv6 = self.reducing_channel(self.input_ch - 5) # 2
+        if self.input_ch == 7:
+            self.conv1 = self.reducing_channel(self.input_ch) # 7
+            self.conv2 = self.reducing_channel(self.input_ch - 1) # 6
+            self.conv3 = self.reducing_channel(self.input_ch - 2) # 5
+            self.conv4 = self.reducing_channel(self.input_ch - 3) # 4
+            self.conv5 = self.reducing_channel(self.input_ch - 4) # 3
+            self.conv6 = self.reducing_channel(self.input_ch - 5) # 2
+        elif self.input_ch == 3:
+            self.conv1 = self.reducing_channel(self.input_ch) # 3
+            self.conv2 = self.reducing_channel(self.input_ch - 1) # 2
+
 
     def reducing_channel(self, inp_channel):
         return nn.Sequential(
@@ -61,22 +65,28 @@ class YoDa(nn.Module):
         ) # 1
     
     def forward(self, x):
-        if self.target_ch == 3:
-            print(" **running on CNN ({}ch target!)\n".format(self.target_ch))
-            x = self.conv1(x)
-            x = self.conv2(x)
-            x = self.conv3(x)
-            x = self.conv4(x)
-        elif self.target_ch == 1:
-            print(" **running on CNN ({}ch target!)\n".format(self.target_ch))
-            x = self.conv1(x)
-            x = self.conv2(x)
-            x = self.conv3(x)
-            x = self.conv4(x)
-            x = self.conv5(x)
-            x = self.conv6(x)
-        else:
-            pass
+        if self.input_ch == 7: # stacking all filters
+            if self.target_ch == 3:
+                # print("\n**running on CNN ({}ch target!)\n".format(self.target_ch))
+                x = self.conv1(x)
+                x = self.conv2(x)
+                x = self.conv3(x)
+                x = self.conv4(x)
+            elif self.target_ch == 1:
+                # print("\n**running on CNN ({}ch target!)\n".format(self.target_ch))
+                x = self.conv1(x)
+                x = self.conv2(x)
+                x = self.conv3(x)
+                x = self.conv4(x)
+                x = self.conv5(x)
+                x = self.conv6(x)
+            else:
+                pass
+        elif self.input_ch == 3: # stacking with specific filters
+            if self.target_ch == 1:
+                # print("\n**running on input_ch {}, tar_ch {}\n".format(self.input_ch, self.target_ch))
+                x = self.conv1(x)
+                x = self.conv2(x)
         return x
 
 ##########################################################################
@@ -229,8 +239,8 @@ class DetectionModel(BaseModel):
     def __init__(self, cfg='yolov5s.yaml', in_ch=None, tar_ch=None, nc=None, anchors=None):  # model, input channels, number of classes
         super().__init__()
         ###############################################
-        input_ch = in_ch
-        target_ch = tar_ch
+        self.input_ch = in_ch
+        self.target_ch = tar_ch
         ###############################################
 
         if isinstance(cfg, dict):
@@ -244,7 +254,7 @@ class DetectionModel(BaseModel):
         # Define model
         ###############################################
         # ch = self.yaml['ch'] = self.yaml.get('ch', ch)  # input channels
-        ch = target_ch
+        ch = self.target_ch
         ###############################################
 
         if nc and nc != self.yaml['nc']:
@@ -263,16 +273,15 @@ class DetectionModel(BaseModel):
             s = 256  # 2x min stride
             m.inplace = self.inplace
             forward = lambda x: self.forward(x, get_dcp_img=False)[0] if isinstance(m, Segment) else self.forward(x, get_dcp_img=False)
-            m.stride = torch.tensor([s / x.shape[-2] for x in forward(torch.zeros(1, target_ch, s, s))])  # forward
+            m.stride = torch.tensor([s / x.shape[-2] for x in forward(torch.zeros(1, self.target_ch, s, s))])  # forward
             check_anchor_order(m)
             m.anchors /= m.stride.view(-1, 1, 1)
             self.stride = m.stride
             self._initialize_biases()  # only run once
         
         #############################################################################################################################
-        print("\n******************\ninput_ch_CNN : {}\ninput_ch_Yolo : {}\n******************\n".format(input_ch, target_ch))
         # Initial the model
-        self.YoDa = YoDa(input_ch, target_ch) # 1 or 3
+        self.YoDa = YoDa(self.input_ch, self.target_ch) # 1 or 3
         #############################################################################################################################
 
         # Init weights, biases
