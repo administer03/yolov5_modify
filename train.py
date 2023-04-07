@@ -456,6 +456,22 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
                         compute_loss=compute_loss)  # val best model with plots
                     if is_coco:
                         callbacks.run('on_fit_epoch_end', list(mloss) + list(results) + lr, epoch, best_fitness, fi)
+        
+        ################################################################
+        # Export Best Score on Validation Set
+        val_P = results[0]
+        val_C = results[1]
+        val_mAP50 = results[2]
+        val_mAP50_90 = results[3]
+        log_text = '\n**** Best (Model) Score on Validation Set ****\n'
+        log_text += 'Precision: {:.2f}\n'.format(val_P)
+        log_text += 'Recall: {:.2f}\n'.format(val_C)
+        log_text += 'mAP@50: {:.2f}\n'.format(val_mAP50)
+        log_text += 'mAP@50:95: {:.2f}\n'.format(val_mAP50_90)
+        save_path = "{}/log.txt".format(save_dir)
+        with open(save_path, 'a') as f:
+            f.write(log_text)
+        ################################################################
 
         callbacks.run('on_train_end', last, best, epoch, results)
 
@@ -566,9 +582,10 @@ def main(opt, callbacks=Callbacks()):
     print("\n***********************************************\
           \ninput_ch_CNN : {}\ninput_ch_Yolo : {}\
           \n".format(opt.input_ch, opt.target_ch))
-    if opt.sp_filters > 1:
+    if opt.sp_filters > 0:
         print("Now procesing in specific stack filters!!!\n")
 
+    list_filter = None
     if opt.sp_filters == 1:
         list_filter = ["Linear", "Sqrt", "Squared"]
     elif opt.sp_filters == 2:
@@ -684,9 +701,10 @@ def main(opt, callbacks=Callbacks()):
     print("\n***********************************************\
           \ninput_ch_CNN : {}\ninput_ch_Yolo : {}\
           \n".format(opt.input_ch, opt.target_ch))
-    if opt.sp_filters > 1:
+    if opt.sp_filters > 0:
         print("Processed with specific stack filters!!!\n")
 
+    list_filter = None
     if opt.sp_filters == 1:
         list_filter = ["Linear", "Sqrt", "Squared"]
     elif opt.sp_filters == 2:
