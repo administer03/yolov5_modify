@@ -805,7 +805,7 @@ class LoadImagesAndLabels(Dataset):
             img = self.relative_stack(img)
         else:
             img = self.stack_(img) # Stack image
-        # print(img.shape)
+        # print(img.shape) --> the image channels will be equal input_ch
         #####################################################################################
 
         # Convert

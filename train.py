@@ -195,6 +195,7 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
         LOGGER.info('Using SyncBatchNorm()')
 
     # Trainloader
+    # After create_dataloader images channels will equal input_ch
     train_loader, dataset = create_dataloader(train_path,
                                               imgsz,
                                               batch_size // WORLD_SIZE,
@@ -353,7 +354,7 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
             if RANK in {-1, 0}:
                 mloss = (mloss * i + loss_items) / (i + 1)  # update mean losses
                 mem = f'{torch.cuda.memory_reserved() / 1E9 if torch.cuda.is_available() else 0:.3g}G'  # (GB)
-                ########################################################################################################
+                ##########################################################################################################
                 # for specific input -> display
                 transformed_img = deepcopy(dcp_obj.cpu().detach().numpy())
                 # print('\ndecode shp', transformed_img.shape) #-> (4, 3, 64, 64) (batch_sz, target_ch, height, width)
@@ -364,8 +365,8 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
                 if transformed_img.shape[1] != 1 and transformed_img.shape[1] != 3:
                     print("\nWrong Target Channels, See more infomation in train.py (365)\n")
 
-                callbacks.run('on_train_batch_end', model, ni, transformed_img, targets, paths, list(mloss))
-                ########################################################################################################
+                callbacks.run('on_train_batch_end', model, ni, transformed_img, targets, paths, list(mloss), opt.target_ch)
+                ###########################################################################################################
                 if callbacks.stop_training:
                     return
             # end batch ------------------------------------------------------------------------------------------------
@@ -390,7 +391,11 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
                                                 save_dir=save_dir,
                                                 plots=False,
                                                 callbacks=callbacks,
-                                                compute_loss=compute_loss)
+                                                compute_loss=compute_loss,
+                                                ##########################
+                                                target_ch = opt.target_ch
+                                                ##########################
+                                                )
 
             # Update best mAP
             fi = fitness(np.array(results).reshape(1, -1))  # weighted combination of [P, R, mAP@.5, mAP@.5-.95]
@@ -453,7 +458,11 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
                         verbose=True,
                         plots=plots,
                         callbacks=callbacks,
-                        compute_loss=compute_loss)  # val best model with plots
+                        compute_loss=compute_loss,
+                        ##########################
+                        target_ch = opt.target_ch
+                        ##########################
+                        )  # val best model with plots
                     if is_coco:
                         callbacks.run('on_fit_epoch_end', list(mloss) + list(results) + lr, epoch, best_fitness, fi)
         
@@ -579,7 +588,7 @@ def main(opt, callbacks=Callbacks()):
         dist.init_process_group(backend='nccl' if dist.is_nccl_available() else 'gloo')
 
     ################################################################
-    print("\n***********************************************\
+    print("\n***********************************\
           \ninput_ch_CNN : {}\ninput_ch_Yolo : {}\
           \n".format(opt.input_ch, opt.target_ch))
     if opt.sp_filters > 0:
@@ -593,7 +602,7 @@ def main(opt, callbacks=Callbacks()):
     elif opt.sp_filters == 3:
         list_filter = ["Power", "SINH", "Squared"]
     print("Special Filters : {}".format(list_filter))
-    print("***********************************************")
+    print("***********************************")
     ################################################################
 
     # Train
@@ -698,7 +707,7 @@ def main(opt, callbacks=Callbacks()):
                     f'Usage example: $ python train.py --hyp {evolve_yaml}')
     
     ################################################################
-    print("\n***********************************************\
+    print("***********************************\
           \ninput_ch_CNN : {}\ninput_ch_Yolo : {}\
           \n".format(opt.input_ch, opt.target_ch))
     if opt.sp_filters > 0:
@@ -712,7 +721,7 @@ def main(opt, callbacks=Callbacks()):
     elif opt.sp_filters == 3:
         list_filter = ["Power", "SINH", "Squared"]
     print("Special Filters : {}".format(list_filter))
-    print("***********************************************")
+    print("***********************************")
     ################################################################
 
 def run(**kwargs):

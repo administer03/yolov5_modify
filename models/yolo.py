@@ -178,6 +178,7 @@ class BaseModel(nn.Module):
             # Input from stacking (w, h, 7) --> (w, h, 1)
             dcp_obj = x
         #########################################################
+        
         for m in self.model:
             if m.f != -1:  # if not from previous layer
                 x = y[m.f] if isinstance(m.f, int) else [x if j == -1 else y[j] for j in m.f]  # from earlier layers

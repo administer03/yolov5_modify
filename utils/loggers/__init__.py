@@ -164,7 +164,7 @@ class Loggers():
             if self.comet_logger:
                 self.comet_logger.on_pretrain_routine_end(paths)
 
-    def on_train_batch_end(self, model, ni, imgs, targets, paths, vals):
+    def on_train_batch_end(self, model, ni, imgs, targets, paths, vals, target_ch):
         log_dict = dict(zip(self.keys[:3], vals))
         # Callback runs on train batch end
         # ni: number integrated batches (since train start)
@@ -175,8 +175,11 @@ class Loggers():
                 if ni == 0 and self.tb and not self.opt.sync_bn:
                     log_tensorboard_graph(self.tb, model, imgsz=(self.opt.imgsz, self.opt.imgsz))
             ########################################################################################
+            # ploting only first channel
+            if target_ch == 1:
+                imgs = imgs[:, 0:1, :, :]
             # save batch train images when batch size reach No.round mod x
-            if (ni > 3) and (ni % 10000 == 0):
+            if (ni > 3) and (ni % 8000 == 0):
                 f = self.save_dir / f'train_batch{ni}.jpg'  # filename
                 plot_images(imgs, targets, paths, f)
                 if ni == 0 and self.tb and not self.opt.sync_bn:

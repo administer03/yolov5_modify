@@ -126,6 +126,9 @@ def run(
         plots=True,
         callbacks=Callbacks(),
         compute_loss=None,
+        ############################
+        target_ch = None,
+        ############################
 ):
     # Initialize/load model and set device
     training = model is not None
@@ -273,12 +276,13 @@ def run(
         if plots and batch_i < 3:
         #################################################################################################################################
             # display with target channels from the CNN
-            plot_images(transformed_img, targets, paths, save_dir / f'val_batch{batch_i}_labels.jpg', names)  # labels
-            plot_images(transformed_img, output_to_target(preds), paths, save_dir / f'val_batch{batch_i}_pred.jpg', names)  # pred
-
-            # specific channels of image for display
-            # plot_images(im[:, 0:1, :, :], targets, paths, save_dir / f'val_batch{batch_i}_labels.jpg', names)  # labels
-            # plot_images(im[:, 0:1, :, :], output_to_target(preds), paths, save_dir / f'val_batch{batch_i}_pred.jpg', names)  # pred
+            if target_ch == 1:
+                # specific channels of image for display
+                plot_images(transformed_img[:, 0:1, :, :], targets, paths, save_dir / f'val_batch{batch_i}_labels.jpg', names)  # labels
+                plot_images(transformed_img[:, 0:1, :, :], output_to_target(preds), paths, save_dir / f'val_batch{batch_i}_pred.jpg', names)  # pred
+            else:
+                plot_images(transformed_img, targets, paths, save_dir / f'val_batch{batch_i}_labels.jpg', names)  # labels
+                plot_images(transformed_img, output_to_target(preds), paths, save_dir / f'val_batch{batch_i}_pred.jpg', names)  # pred
         #################################################################################################################################
 
         callbacks.run('on_val_batch_end', batch_i, im, targets, paths, shapes, preds)
