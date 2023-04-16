@@ -169,22 +169,33 @@ class Loggers():
         # Callback runs on train batch end
         # ni: number integrated batches (since train start)
         if self.plots:
-            if ni < 3:
-                f = self.save_dir / f'train_batch{ni}.jpg'  # filename
-                plot_images(imgs, targets, paths, f)
+            if ni < 5:
+                ################################################################
+                if target_ch > 1:
+                    f = self.save_dir / f'train_batch{ni}_more1ch.jpg'  # filename
+                    plot_images(imgs[:, 0:1, :, :], targets, paths, f)
+                else:
+                    f = self.save_dir / f'train_batch{ni}.jpg'  # filename
+                    plot_images(imgs, targets, paths, f)
+                ################################################################
+                
                 if ni == 0 and self.tb and not self.opt.sync_bn:
                     log_tensorboard_graph(self.tb, model, imgsz=(self.opt.imgsz, self.opt.imgsz))
-            ########################################################################################
-            # ploting only first channel
-            if target_ch == 1:
-                imgs = imgs[:, 0:1, :, :]
+
             # save batch train images when batch size reach No.round mod x
-            if (ni > 3) and (ni % 8000 == 0):
-                f = self.save_dir / f'train_batch{ni}.jpg'  # filename
-                plot_images(imgs, targets, paths, f)
+            if (ni > 5) and (ni % 8000 == 0):
+                ################################################################
+                if target_ch > 1:
+                    f = self.save_dir / f'train_batch{ni}_more1ch.jpg'  # filename
+                    plot_images(imgs[:, 0:1, :, :], targets, paths, f)
+                else:
+                    f = self.save_dir / f'train_batch{ni}.jpg'  # filename
+                    plot_images(imgs, targets, paths, f)
+                ################################################################
+        
                 if ni == 0 and self.tb and not self.opt.sync_bn:
                     log_tensorboard_graph(self.tb, model, imgsz=(self.opt.imgsz, self.opt.imgsz))
-            ########################################################################################
+
             if ni == 10 and (self.wandb or self.clearml):
                 files = sorted(self.save_dir.glob('train*.jpg'))
                 if self.wandb:

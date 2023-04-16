@@ -356,7 +356,8 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
                 mem = f'{torch.cuda.memory_reserved() / 1E9 if torch.cuda.is_available() else 0:.3g}G'  # (GB)
                 ##########################################################################################################
                 # for specific input -> display
-                transformed_img = deepcopy(dcp_obj.cpu().detach().numpy())
+                transformed_img = deepcopy(dcp_obj.detach().cpu().numpy())
+                # print('\n\nsh : {}\n\n'.format(transformed_img.shape)) -> (8, 1, 1024, 1024)
                 # print('\ndecode shp', transformed_img.shape) #-> (4, 3, 64, 64) (batch_sz, target_ch, height, width)
                 pbar.set_description(('%11s' * 2 + '%11.4g' * 5) %
                                      (f'{epoch}/{epochs - 1}', mem, *mloss, targets.shape[0], imgs.shape[-1]))
@@ -364,7 +365,7 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
                 # incase specific target channels
                 if transformed_img.shape[1] != 1 and transformed_img.shape[1] != 3:
                     print("\nWrong Target Channels, See more infomation in train.py (365)\n")
-
+                
                 callbacks.run('on_train_batch_end', model, ni, transformed_img, targets, paths, list(mloss), opt.target_ch)
                 ###########################################################################################################
                 if callbacks.stop_training:
@@ -473,10 +474,10 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
         val_mAP50 = results[2]
         val_mAP50_90 = results[3]
         log_text = '\n**** Best (Model) Score on Validation Set ****\n'
-        log_text += 'Precision: {:.2f}\n'.format(val_P)
-        log_text += 'Recall: {:.2f}\n'.format(val_C)
-        log_text += 'mAP@50: {:.2f}\n'.format(val_mAP50)
-        log_text += 'mAP@50:95: {:.2f}\n'.format(val_mAP50_90)
+        log_text += 'Precision: {:.3f}\n'.format(val_P)
+        log_text += 'Recall: {:.3f}\n'.format(val_C)
+        log_text += 'mAP@50: {:.3f}\n'.format(val_mAP50)
+        log_text += 'mAP@50:95: {:.3f}\n'.format(val_mAP50_90)
         save_path = "{}/log.txt".format(save_dir)
         with open(save_path, 'a') as f:
             f.write(log_text)

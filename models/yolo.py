@@ -165,8 +165,8 @@ class Segment(Detect):
 
 class BaseModel(nn.Module):
     # YOLOv5 base model
-    def forward(self, x, profile=False, visualize=False):
-        return self._forward_once(x, profile, visualize)  # single-scale inference, train
+    def forward(self, x, profile=False, visualize=False, get_dcp_img=False):
+        return self._forward_once(x, profile, visualize, get_dcp_img=get_dcp_img)  # single-scale inference, train
 
     def _forward_once(self, x, profile=False, visualize=False, get_dcp_img=False):
         y, dt = [], []  # outputs
@@ -179,7 +179,7 @@ class BaseModel(nn.Module):
             dcp_obj = x
         #########################################################
         
-        for m in self.model:
+        for m in self.model: # to obtain the output bounding box predictions 
             if m.f != -1:  # if not from previous layer
                 x = y[m.f] if isinstance(m.f, int) else [x if j == -1 else y[j] for j in m.f]  # from earlier layers
             if profile:
@@ -283,10 +283,10 @@ class DetectionModel(BaseModel):
             self.stride = m.stride
             self._initialize_biases()  # only run once
         
-        #############################################################################################################################
+        #########################################################
         # Initial the model
-        self.YoDa = YoDa(self.input_ch, self.target_ch) # 1 or 3
-        #############################################################################################################################
+        self.YoDa = YoDa(self.input_ch, self.target_ch)
+        #########################################################
 
         # Init weights, biases
         initialize_weights(self)

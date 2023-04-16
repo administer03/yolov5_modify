@@ -128,6 +128,7 @@ def run(
         compute_loss=None,
         ############################
         target_ch = None,
+        sp_filters = None,
         ############################
 ):
     # Initialize/load model and set device
@@ -173,7 +174,12 @@ def run(
             ncm = model.model.nc
             assert ncm == nc, f'{weights} ({ncm} classes) trained on different --data than what you passed ({nc} ' \
                               f'classes). Pass correct combination of --weights and --data that are trained together.'
-        model.warmup(imgsz=(1 if pt else batch_size, 3, imgsz, imgsz))  # warmup
+        ############################################################################
+        try:
+            model.warmup(imgsz=(1 if pt else batch_size, 3, imgsz, imgsz))  # warmup
+        except:
+            model.warmup(imgsz=(1 if pt else batch_size, 1, imgsz, imgsz))  # warmup
+        ############################################################################
         pad, rect = (0.0, False) if task == 'speed' else (0.5, pt)  # square inference for benchmarks
         task = task if task in ('train', 'val', 'test') else 'val'  # path to train/val/test images
         dataloader = create_dataloader(data[task],
@@ -184,6 +190,9 @@ def run(
                                        pad=pad,
                                        rect=rect,
                                        workers=workers,
+                                       ############################
+                                       sp_filters = opt.sp_filters,
+                                       ############################
                                        prefix=colorstr(f'{task}: '))[0]
 
     seen = 0
@@ -213,9 +222,15 @@ def run(
         # Inference
         with dt[1]:
             #######################################################################################################################################
-            (preds, train_out), transformed_img = model(im, get_dcp_img=True) if compute_loss else (model(im, augment=augment, get_dcp_img=True), None)
+            try:
+                # called by train.py
+                (preds, train_out), transformed_img = model(im, get_dcp_img=True) if compute_loss else (model(im, augment=augment, get_dcp_img=True), None)
+            except:
+                # call directly
+                pass
             # transformed_img is the image that was calculated by CNN layers, ie. ch 7 --> ch 3
             transformed_img = deepcopy(transformed_img.cpu().detach().numpy())
+            # print('/n/n The shape: ',transformed_img.shape,'/n/n') --> followed by output_ch
             #######################################################################################################################################
 
         # Loss
@@ -272,20 +287,32 @@ def run(
                 save_one_json(predn, jdict, path, class_map)  # append to COCO-JSON dictionary
             callbacks.run('on_val_image_end', pred, predn, path, names, im[si])
 
+        ###################################################
+        # if channels size of image greater than 1 channels
+        # then, plot only first layer
+        if transformed_img.shape[1] > 1:
+            plotting_img = transformed_img[:, 0:1, :, :]
+        else:
+            plotting_img = transformed_img
+        ###################################################
         # Plot images
         if plots and batch_i < 3:
-        #################################################################################################################################
-            # display with target channels from the CNN
-            if target_ch == 1:
-                # specific channels of image for display
-                plot_images(transformed_img[:, 0:1, :, :], targets, paths, save_dir / f'val_batch{batch_i}_labels.jpg', names)  # labels
-                plot_images(transformed_img[:, 0:1, :, :], output_to_target(preds), paths, save_dir / f'val_batch{batch_i}_pred.jpg', names)  # pred
-            else:
-                plot_images(transformed_img, targets, paths, save_dir / f'val_batch{batch_i}_labels.jpg', names)  # labels
-                plot_images(transformed_img, output_to_target(preds), paths, save_dir / f'val_batch{batch_i}_pred.jpg', names)  # pred
-        #################################################################################################################################
+        #######################################################################################################################
 
-        callbacks.run('on_val_batch_end', batch_i, im, targets, paths, shapes, preds)
+            plot_images(plotting_img, targets, paths, save_dir / f'val_batch{batch_i}_labels.jpg', names)  # labels
+            plot_images(plotting_img, output_to_target(preds), paths, save_dir / f'val_batch{batch_i}_pred.jpg', names)  # pred
+           
+            # plot_images(im[:, 0:1, :, :], targets, paths, save_dir / f'val_batch{batch_i}_labels_1stCH.jpg', names)  # labels
+            # plot_images(im[:, 0:1, :, :], output_to_target(preds), paths, save_dir / f'val_batch{batch_i}_pred_1stCH.jpg', names) # pred
+            
+            # im will represent the input data (i.e. input_ch = 7)
+            # below code will plot image channel follow by input_ch
+            # plot_images(im, targets, paths, save_dir / f'val_batch{batch_i}_labels.jpg', names)  # labels
+            # plot_images(im, output_to_target(preds), paths, save_dir / f'val_batch{batch_i}_pred.jpg', names)  # pred
+        #######################################################################################################################
+
+        # callbacks.run('on_val_batch_end', batch_i, im, targets, paths, shapes, preds)
+        callbacks.run('on_val_batch_end', batch_i, plotting_img, targets, paths, shapes, preds)
 
     # Compute metrics
     stats = [torch.cat(x, 0).cpu().numpy() for x in zip(*stats)]  # to numpy
@@ -357,6 +384,11 @@ def run(
 
 def parse_opt():
     parser = argparse.ArgumentParser()
+    ########################################################################################################
+    parser.add_argument('--sp-filters', type=int, default=0, help='0 means does not use a specific filter\
+                        1 means use a ["Linear", "Sqrt", "Squared"], 2 means use a ["Log", "ASINH", "Sqrt"]\
+                        and 3 means use a ["Power", "SINH", "Squared"]')
+    ########################################################################################################
     parser.add_argument('--data', type=str, default=ROOT / 'data/coco128.yaml', help='dataset.yaml path')
     parser.add_argument('--weights', nargs='+', type=str, default=ROOT / 'yolov5s.pt', help='model path(s)')
     parser.add_argument('--batch-size', type=int, default=32, help='batch size')
