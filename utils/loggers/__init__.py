@@ -187,7 +187,7 @@ class Loggers():
                     log_tensorboard_graph(self.tb, model, imgsz=(self.opt.imgsz, self.opt.imgsz))
 
             # save batch train images when batch size reach No.round mod x
-            if (ni > 5) and (ni % 8000 == 0):
+            if (ni > 5) and (ni % 5000 == 0):
                 ################################################################
                 if target_ch > 1:
                     f = self.save_dir / f'train_batch{ni}_more1ch.jpg'  # filename
