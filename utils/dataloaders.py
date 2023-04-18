@@ -847,6 +847,11 @@ class LoadImagesAndLabels(Dataset):
         for i, index in enumerate(indices):
             # Load image
             img, _, (h, w) = self.load_image(index)
+            ###############################################################################
+            # h, w, 3 -> h, w, 1
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            img = img.reshape(h, w, 1)
+            ###############################################################################
 
             # place img in img4
             if i == 0:  # top left
@@ -905,6 +910,11 @@ class LoadImagesAndLabels(Dataset):
         for i, index in enumerate(indices):
             # Load image
             img, _, (h, w) = self.load_image(index)
+            ###############################################################################
+            # h, w, 3 -> h, w, 1
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            img = img.reshape(h, w, 1)
+            ###############################################################################
 
             # place img in img9
             if i == 0:  # center

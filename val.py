@@ -222,16 +222,10 @@ def run(
         # Inference
         with dt[1]:
             #######################################################################################################################################
-            try:
-                # called by train.py
-                (preds, train_out), transformed_img = model(im, get_dcp_img=True) if compute_loss else (model(im, augment=augment, get_dcp_img=True), None)
-                # transformed_img is the image that was calculated by CNN layers, ie. ch 7 --> ch 3
-                transformed_img = deepcopy(transformed_img.cpu().detach().numpy())
-                # print('/n/n The shape: ',transformed_img.shape,'/n/n') --> followed by output_ch
-            except:
-                # call directly by val.py
-                preds, train_out = model(im) if compute_loss else (model(im, augment=augment), None)
-                transformed_img = im[:, 0:1, :, :]
+            (preds, train_out), transformed_img = model(im, get_dcp_img=True) if compute_loss else (model(im, augment=augment, get_dcp_img=True), None)
+            # transformed_img is the image that was calculated by CNN layers, ie. ch 7 --> ch 3
+            transformed_img = deepcopy(transformed_img.cpu().detach().numpy())
+            # print('/n/n The shape: ',transformed_img.shape,'/n/n') --> followed by output_ch
             #######################################################################################################################################
 
         # Loss
