@@ -175,9 +175,12 @@ class Loggers():
         if self.plots:
             if ni < 5:
                 ################################################################
-                if target_ch > 1:
+                if target_ch > 1 and target_ch != 3:
                     f = self.save_dir / f'train_batch{ni}_more1ch.jpg'  # filename
                     plot_images(imgs[:, 0:1, :, :], targets, paths, f)
+                elif target_ch > 1 and target_ch == 3:
+                    f = self.save_dir / f'train_batch{ni}_3ch.jpg'  # filename
+                    plot_images(imgs, targets, paths, f)
                 else:
                     f = self.save_dir / f'train_batch{ni}.jpg'  # filename
                     plot_images(imgs, targets, paths, f)
@@ -192,6 +195,9 @@ class Loggers():
                 if target_ch > 1:
                     f = self.save_dir / f'train_batch{ni}_more1ch.jpg'  # filename
                     plot_images(imgs[:, 0:1, :, :], targets, paths, f)
+                elif target_ch > 1 and target_ch == 3:
+                    f = self.save_dir / f'train_batch{ni}_3ch.jpg'  # filename
+                    plot_images(imgs, targets, paths, f)
                 else:
                     f = self.save_dir / f'train_batch{ni}.jpg'  # filename
                     plot_images(imgs, targets, paths, f)

@@ -110,7 +110,11 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
     init_seeds(opt.seed + 1 + RANK, deterministic=True)
     with torch_distributed_zero_first(LOCAL_RANK):
         data_dict = data_dict or check_dataset(data)  # check if None
+    ###########################################################
+    # load dataset from data.yaml
     train_path, val_path = data_dict['train'], data_dict['val']
+    ###########################################################
+
     nc = 1 if single_cls else int(data_dict['nc'])  # number of classes
     names = {0: 'item'} if single_cls and len(data_dict['names']) != 1 else data_dict['names']  # class names
     is_coco = isinstance(val_path, str) and val_path.endswith('coco/val2017.txt')  # COCO dataset
@@ -197,9 +201,9 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
     # Trainloader
     # After create_dataloader images channels will equal input_ch
     train_loader, dataset = create_dataloader(train_path,
-                                              imgsz,
+                                              imgsz, # image size
                                               batch_size // WORLD_SIZE,
-                                              gs,
+                                              gs, # grid size (max stride)
                                               single_cls,
                                               hyp=hyp,
                                               augment=True,
