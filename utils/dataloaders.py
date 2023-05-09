@@ -36,9 +36,14 @@ from utils.general import (DATASETS_DIR, LOGGER, NUM_THREADS, TQDM_BAR_FORMAT, c
                            xywh2xyxy, xywhn2xyxy, xyxy2xywhn)
 from utils.torch_utils import torch_distributed_zero_first
 
+###
+from astropy.visualization import ZScaleInterval
+
 # Parameters
 HELP_URL = 'See https://github.com/ultralytics/yolov5/wiki/Train-Custom-Data'
-IMG_FORMATS = 'bmp', 'dng', 'jpeg', 'jpg', 'mpo', 'png', 'tif', 'tiff', 'webp', 'pfm'  # include image suffixes
+##############################################################################################################
+IMG_FORMATS = 'bmp', 'dng', 'jpeg', 'jpg', 'mpo', 'png', 'tif', 'tiff', 'webp', 'pfm', 'npy'  # include image suffixes
+########
 VID_FORMATS = 'asf', 'avi', 'gif', 'm4v', 'mkv', 'mov', 'mp4', 'mpeg', 'mpg', 'ts', 'wmv'  # include video suffixes
 LOCAL_RANK = int(os.getenv('LOCAL_RANK', -1))  # https://pytorch.org/docs/stable/elastic/run.html
 RANK = int(os.getenv('RANK', -1))
@@ -475,6 +480,7 @@ class LoadImagesAndLabels(Dataset):
         self.albumentations = Albumentations(size=img_size) if augment else None
         ############################
         self.sp_filters = sp_filters
+        self.z = ZScaleInterval(n_samples=600)
         ############################
 
         try:
@@ -604,41 +610,43 @@ class LoadImagesAndLabels(Dataset):
             pbar.close()
 
 #########################################################################################
-    def apply_filter(self, im, fil):
-    # Apply particular filter to image
-        im = im / 255.
-
+    def apply_filter(self, im, fil): # Apply particular filter to image
+        im = np.interp(im, (im.min(), im.max()), (0, 1))
         filter_name = fil
-
         if filter_name == "Linear":
             im = im
         elif filter_name == "Log":
-            im = (np.log(1000 * im + 1)) / (np.log(1000))
+            e = np.exp(-10 * im)
+            im = (e - 1) / (np.exp(-10) - 1)
         elif filter_name == "Power":
-            im = (np.power(1000, im) - 1) / 1000
+            # print('\n',im.min(), im.max())
+            im = (np.power(1000, im) - 1) / 1000.0
         elif filter_name == "Sqrt":
+            # fil < 0 with 0
+            im[im < 0] = 0.0
             im = np.sqrt(im)
         elif filter_name == "Squared":
-            im = np.square(im)
+            im = im**2
         elif filter_name == "ASINH":
             im = (np.arcsinh(10*im)) / 3
         elif filter_name == "SINH":
-            im = (np.sinh(10*im)) / 3
+            im = (np.sinh(3*im)) / 10
         else:
-            raise
+            print("No filter applied")
 
-        im = np.interp(im, (im.min(), im.max()), (0, 255))
+        im = self.z(im)
+        # normalize image back to 0-255
+        im = im * 255
         return im
 
     def stack_(self, img):
         # Stack images
-        list_filter = ["Log", "Power", "Sqrt", "Squared", "ASINH", "SINH"]
+        list_filter = ["Linear", "Log", "Power", "Sqrt", "Squared", "ASINH", "SINH"]
         img_7ch = np.zeros(shape=(img.shape[0], img.shape[1], 7))
-        img_7ch[:, :, 0] = img  # Linear
         linear_img = deepcopy(img)
         for i in range(len(list_filter)):
             filtered_img = self.apply_filter(linear_img, list_filter[i])
-            img_7ch[:, :, i+1] = filtered_img
+            img_7ch[:, :, i] = filtered_img
         return img_7ch
 
     def relative_stack(self, img):
@@ -725,6 +733,46 @@ class LoadImagesAndLabels(Dataset):
     #     print('ran dataset iter')
     #     #self.shuffled_vector = np.random.permutation(self.nF) if self.augment else np.arange(self.nF)
     #     return self
+    ################
+    def preprocess_raw(self, im):
+
+        if len(im.shape) == 2:
+            im = np.expand_dims(im, axis=-1)
+
+        im_non_nan = deepcopy(im)
+
+        masked_nan = np.isnan(im_non_nan)
+        masked_pinf = np.isposinf(im_non_nan)
+        masked_ninf = np.isneginf(im_non_nan)
+        im_non_nan[masked_nan] = 0.0
+        im_non_nan[masked_pinf] = 0.0
+        im_non_nan[masked_ninf] = 0.0
+
+        # assert np.isnan(im_non_nan).sum() > 0, 'Error nan were found even after using nan_to_num'
+        mean = np.mean(im_non_nan)
+        std = np.std(im_non_nan)
+        threshold = 5 * std
+        max_pixel_val = mean + threshold
+
+        # print(im_non_nan.dtype)
+        # print(f'Shape: {im_non_nan.shape}')
+        # print(f'Totoal inf: {masked_pinf.sum()}, Total -inf: {masked_ninf.sum()}')
+        # print(f"Total nan: {masked_nan.sum()}, After: {np.isnan(im_non_nan).sum()}")
+        # print(f"Mean: {mean}, Std: {std}, Threshold: {threshold}, max_pixel: {max_pixel_val}")
+        # assert np.isnan(im_non_nan).sum() == 0, 'Error nan were found even after using nan_to_num'
+        # assert np.isinf(im_non_nan).sum() == 0, 'Error inf were found even after using nan_to_num'
+
+        images_without_outliers = im_non_nan.copy()
+        outlier_mask = np.abs(im_non_nan - mean) >= threshold
+
+        images_without_outliers[outlier_mask] = max_pixel_val
+
+        # Clip value to 0-1
+        images_without_outliers /= max_pixel_val
+        images_without_outliers = np.interp(images_without_outliers, (images_without_outliers.min(), images_without_outliers.max()), (0, 255))
+        # print(images_without_outliers.shape, images_without_outliers.min(), images_without_outliers.max())
+        return images_without_outliers
+    ############
 
     def __getitem__(self, index):
         index = self.indices[index]  # linear, shuffled, or image_weights
@@ -743,17 +791,19 @@ class LoadImagesAndLabels(Dataset):
         else:
             # Load image
             img, (h0, w0), (h, w) = self.load_image(index)
-
-            ###############################################################################
-            # h, w, 3 -> h, w, 1
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-            img = img.reshape(h, w, 1)
+            ##############################################################################
+            img = self.preprocess_raw(img)
+            # print('\nbefore : ',img.min(), img.max())
+            # # h, w, 3 -> h, w, 1
+            # img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            # img = img.reshape(h, w, 1)
             ###############################################################################
 
             # Letterbox
             shape = self.batch_shapes[self.batch[index]] if self.rect else self.img_size  # final letterboxed shape
             img, ratio, pad = letterbox(img, shape, auto=False, scaleup=self.augment)
             shapes = (h0, w0), ((h / h0, w / w0), pad)  # for COCO mAP rescaling
+            # print('\nafter : ',img.min(), img.max())
 
             labels = self.labels[index].copy()
             if labels.size:  # normalized xywh to pixel xyxy format
@@ -820,8 +870,17 @@ class LoadImagesAndLabels(Dataset):
         if im is None:  # not cached in RAM
             if fn.exists():  # load npy
                 im = np.load(fn)
+                ###
+                im = im.astype(np.float64)
+                im = np.expand_dims(im ,axis=-1) # (1024, 1024) -> (1024, 1024, 1)
+                ###
             else:  # read image
-                im = cv2.imread(f)  # BGR
+                # im = cv2.imread(f)  # BGR
+                ###
+                im = np.load(f)
+                im = im.astype(np.float64)
+                im = np.expand_dims(im ,axis=-1) # (1024, 1024) -> (1024, 1024, 1)
+                ###
                 assert im is not None, f'Image Not Found {f}'
             h0, w0 = im.shape[:2]  # orig hw
             r = self.img_size / max(h0, w0)  # ratio
@@ -845,13 +904,15 @@ class LoadImagesAndLabels(Dataset):
         indices = [index] + random.choices(self.indices, k=3)  # 3 additional image indices
         random.shuffle(indices)
         for i, index in enumerate(indices):
+            # ###############################################################################
             # Load image
             img, _, (h, w) = self.load_image(index)
-            ###############################################################################
-            # h, w, 3 -> h, w, 1
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-            img = img.reshape(h, w, 1)
-            ###############################################################################
+            img = self.preprocess_raw(img)
+            
+            # # h, w, 3 -> h, w, 1
+            # img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            # img = img.reshape(h, w, 1)
+            # ###############################################################################
 
             # place img in img4
             if i == 0:  # top left
@@ -887,16 +948,16 @@ class LoadImagesAndLabels(Dataset):
         # img4, labels4 = replicate(img4, labels4)  # replicate
 
         # Augment
-        img4, labels4, segments4 = copy_paste(img4, labels4, segments4, p=self.hyp['copy_paste'])
-        img4, labels4 = random_perspective(img4,
-                                           labels4,
-                                           segments4,
-                                           degrees=self.hyp['degrees'],
-                                           translate=self.hyp['translate'],
-                                           scale=self.hyp['scale'],
-                                           shear=self.hyp['shear'],
-                                           perspective=self.hyp['perspective'],
-                                           border=self.mosaic_border)  # border to remove
+        # img4, labels4, segments4 = copy_paste(img4, labels4, segments4, p=self.hyp['copy_paste'])
+        # img4, labels4 = random_perspective(img4,
+        #                                    labels4,
+        #                                    segments4,
+        #                                    degrees=self.hyp['degrees'],
+        #                                    translate=self.hyp['translate'],
+        #                                    scale=self.hyp['scale'],
+        #                                    shear=self.hyp['shear'],
+        #                                    perspective=self.hyp['perspective'],
+        #                                    border=self.mosaic_border)  # border to remove
 
         return img4, labels4
 
@@ -1092,18 +1153,25 @@ def verify_image_label(args):
     im_file, lb_file, prefix = args
     nm, nf, ne, nc, msg, segments = 0, 0, 0, 0, '', []  # number (missing, found, empty, corrupt), message, segments
     try:
+        # # verify images
+        # im = Image.open(im_file)
+        # im.verify()  # PIL verify
+        # shape = exif_size(im)  # image size
+        # assert (shape[0] > 9) & (shape[1] > 9), f'image size {shape} <10 pixels'
+        # assert im.format.lower() in IMG_FORMATS, f'invalid image format {im.format}'
+        # if im.format.lower() in ('jpg', 'jpeg'):
+        #     with open(im_file, 'rb') as f:
+        #         f.seek(-2, 2)
+        #         if f.read() != b'\xff\xd9':  # corrupt JPEG
+        #             ImageOps.exif_transpose(Image.open(im_file)).save(im_file, 'JPEG', subsampling=0, quality=100)
+        #             msg = f'{prefix}WARNING ⚠️ {im_file}: corrupt JPEG restored and saved'
+
         # verify images
-        im = Image.open(im_file)
-        im.verify()  # PIL verify
-        shape = exif_size(im)  # image size
-        assert (shape[0] > 9) & (shape[1] > 9), f'image size {shape} <10 pixels'
-        assert im.format.lower() in IMG_FORMATS, f'invalid image format {im.format}'
-        if im.format.lower() in ('jpg', 'jpeg'):
-            with open(im_file, 'rb') as f:
-                f.seek(-2, 2)
-                if f.read() != b'\xff\xd9':  # corrupt JPEG
-                    ImageOps.exif_transpose(Image.open(im_file)).save(im_file, 'JPEG', subsampling=0, quality=100)
-                    msg = f'{prefix}WARNING ⚠️ {im_file}: corrupt JPEG restored and saved'
+        ###########################
+        im = np.load(im_file) # numpy format 1024, 1024, 3
+        im = np.expand_dims(im, axis=-1)
+        shape = im.shape[:2] # need to be (1024, 1024)
+        ############################
 
         # verify labels
         if os.path.isfile(lb_file):
