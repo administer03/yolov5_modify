@@ -95,7 +95,6 @@ def process_batch(detections, labels, iouv):
             correct[matches[:, 1].astype(int), i] = True
     return torch.tensor(correct, dtype=torch.bool, device=iouv.device)
 
-
 @smart_inference_mode()
 def run(
         data,
@@ -170,6 +169,7 @@ def run(
 
     # Dataloader
     if not training:
+        print('\nLoader on val.py')
         if pt and not single_cls:  # check --weights are trained on --data
             ncm = model.model.nc
             assert ncm == nc, f'{weights} ({ncm} classes) trained on different --data than what you passed ({nc} ' \
@@ -182,6 +182,7 @@ def run(
         ############################################################################
         pad, rect = (0.0, False) if task == 'speed' else (0.5, pt)  # square inference for benchmarks
         task = task if task in ('train', 'val', 'test') else 'val'  # path to train/val/test images
+        # print('*'*10,'\n','*'*10)
         dataloader = create_dataloader(data[task],
                                        imgsz,
                                        batch_size,
@@ -211,6 +212,7 @@ def run(
     for batch_i, (im, targets, paths, shapes) in enumerate(pbar):
         callbacks.run('on_val_batch_start')
         with dt[0]:
+            # print('\nd[0]')
             if cuda:
                 im = im.to(device, non_blocking=True)
                 targets = targets.to(device)
@@ -221,17 +223,12 @@ def run(
 
         # Inference
         with dt[1]:
+            # print('d[1]')
             #######################################################################################################################################
-            try :
-                (preds, train_out), transformed_img = model(im, get_dcp_img=True) if compute_loss else (model(im, augment=augment, get_dcp_img=True), None)
-                # transformed_img is the image that was calculated by CNN layers, ie. ch 7 --> ch 3
-            except :
-                preds, train_out = model(im) if compute_loss else (model(im, augment=augment), None)
-                transformed_img = im[:,0:1,:,:]
+            (preds, train_out), transformed_img = model(im, get_dcp_img=True) if compute_loss else (model(im, augment=augment, get_dcp_img=True), None)
             transformed_img = deepcopy(transformed_img.cpu().detach().numpy())
-            # print('/n/n The shape: ',transformed_img.shape,'/n/n') --> followed by output_ch
             #######################################################################################################################################
-
+        
         # Loss
         if compute_loss:
             loss += compute_loss(train_out, targets)[1]  # box, obj, cls
@@ -286,28 +283,15 @@ def run(
                 save_one_json(predn, jdict, path, class_map)  # append to COCO-JSON dictionary
             callbacks.run('on_val_image_end', pred, predn, path, names, im[si])
 
-        ###################################################
-        # if channels size of image greater than 1 channels
-        # then, plot only first layer
-        if transformed_img.shape[1] > 1:
-            plotting_img = transformed_img[:, 0:1, :, :]
-        else:
-            plotting_img = transformed_img
-        ###################################################
+        ##############################
+        plotting_img = transformed_img
+        ##############################
+
         # Plot images
         if plots and batch_i < 3:
         #######################################################################################################################
-
             plot_images(plotting_img, targets, paths, save_dir / f'val_batch{batch_i}_labels.jpg', names)  # labels
             plot_images(plotting_img, output_to_target(preds), paths, save_dir / f'val_batch{batch_i}_pred.jpg', names)  # pred
-           
-            # plot_images(im[:, 0:1, :, :], targets, paths, save_dir / f'val_batch{batch_i}_labels_1stCH.jpg', names)  # labels
-            # plot_images(im[:, 0:1, :, :], output_to_target(preds), paths, save_dir / f'val_batch{batch_i}_pred_1stCH.jpg', names) # pred
-            
-            # im will represent the input data (i.e. input_ch = 7)
-            # below code will plot image channel follow by input_ch
-            # plot_images(im, targets, paths, save_dir / f'val_batch{batch_i}_labels.jpg', names)  # labels
-            # plot_images(im, output_to_target(preds), paths, save_dir / f'val_batch{batch_i}_pred.jpg', names)  # pred
         #######################################################################################################################
 
         # callbacks.run('on_val_batch_end', batch_i, im, targets, paths, shapes, preds)

@@ -49,9 +49,6 @@ class YoDa(nn.Module):
             self.conv4 = self.reducing_channel(self.input_ch - 3) # 4
             self.conv5 = self.reducing_channel(self.input_ch - 4) # 3
             self.conv6 = self.reducing_channel(self.input_ch - 5) # 2
-        elif self.input_ch == 3:
-            self.conv1 = self.reducing_channel(self.input_ch) # 3
-            self.conv2 = self.reducing_channel(self.input_ch - 1) # 2
 
 
     def reducing_channel(self, inp_channel):
@@ -74,19 +71,14 @@ class YoDa(nn.Module):
                 x = self.conv4(x)
             elif self.target_ch == 1:
                 # print("\n**running on CNN ({}ch target!)\n".format(self.target_ch))
+                # input_data = x
+                # print(input_data.shape) # represent (batch, channel, height, width)
                 x = self.conv1(x)
                 x = self.conv2(x)
                 x = self.conv3(x)
                 x = self.conv4(x)
                 x = self.conv5(x)
                 x = self.conv6(x)
-            else:
-                pass
-        elif self.input_ch == 3: # stacking with specific filters
-            if self.target_ch == 1:
-                # print("\n**running on input_ch {}, tar_ch {}\n".format(self.input_ch, self.target_ch))
-                x = self.conv1(x)
-                x = self.conv2(x)
         return x
 
 ##########################################################################

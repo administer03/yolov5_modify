@@ -17,7 +17,7 @@ from multiprocessing.pool import Pool, ThreadPool
 from pathlib import Path
 from threading import Thread
 from urllib.parse import urlparse
-from copy import deepcopy
+
 
 import numpy as np
 import psutil
@@ -38,6 +38,7 @@ from utils.torch_utils import torch_distributed_zero_first
 
 ################################################
 from astropy.visualization import ZScaleInterval
+from copy import deepcopy
 ################################################
 
 # Parameters
@@ -614,6 +615,7 @@ class LoadImagesAndLabels(Dataset):
 #########################################################################################
     def apply_filter(self, im, fil): # Apply particular filter to image
         im = np.interp(im, (im.min(), im.max()), (0, 1))
+        # print(im.min(), im.max())
         filter_name = fil
         if filter_name == "Linear":
             im = im
@@ -634,18 +636,19 @@ class LoadImagesAndLabels(Dataset):
         else:
             print("No filter applied")
 
-        im = self.z(im)
+        im = self.z(im) # -> return values between 0 and 1
         # normalize image back to 0-255
         im = im * 255
+        # print("max: ", im.max(), "min: ", im.min(), "mean: ", im.mean(), "std: ", im.std())
         return im
 
     def stack_(self, img):
         # Stack images
         list_filter = ["Linear", "Log", "Power", "Sqrt", "Squared", "ASINH", "SINH"]
         img_7ch = np.zeros(shape=(img.shape[0], img.shape[1], 7))
-        linear_img = deepcopy(img)
+        original_img = deepcopy(img)
         for i in range(len(list_filter)):
-            filtered_img = self.apply_filter(linear_img, list_filter[i])
+            filtered_img = self.apply_filter(original_img, list_filter[i])
             img_7ch[:, :, i] = filtered_img
         return img_7ch
 
@@ -659,12 +662,12 @@ class LoadImagesAndLabels(Dataset):
             list_filter = ["Power", "SINH", "Squared"]
 
         img_ch = np.zeros(shape=(img.shape[0], img.shape[1], len(list_filter)))
-        linear_img = deepcopy(img)
+        original_img = deepcopy(img)
         for i in range(len(list_filter)):
             if list_filter[i] == "Linear":
                 img_ch[:, :, i] = img
             else:
-                filtered_img = self.apply_filter(linear_img, list_filter[i])
+                filtered_img = self.apply_filter(original_img, list_filter[i])
                 img_ch[:, :, i] = filtered_img
         return img_ch
     
@@ -736,35 +739,18 @@ class LoadImagesAndLabels(Dataset):
 
     ############################################################################################################
     def preprocess_raw(self, im):
-
         if len(im.shape) == 2:
             im = np.expand_dims(im, axis=-1)
 
         im_non_nan = deepcopy(im)
 
-        masked_nan = np.isnan(im_non_nan)
-        masked_pinf = np.isposinf(im_non_nan)
-        masked_ninf = np.isneginf(im_non_nan)
-        im_non_nan[masked_nan] = 0.0
-        im_non_nan[masked_pinf] = 0.0
-        im_non_nan[masked_ninf] = 0.0
+        im_non_nan[im_non_nan < 0] = 0.0
+        im_non_nan = np.nan_to_num(im_non_nan, nan=0.0, posinf=0.0, neginf=0.0)
 
-        # assert np.isnan(im_non_nan).sum() > 0, 'Error nan were found even after using nan_to_num'
-        mean = np.mean(im_non_nan)
-        std = np.std(im_non_nan)
-        threshold = 5 * std
-        max_pixel_val = mean + threshold
-
-        images_without_outliers = im_non_nan.copy()
-        outlier_mask = np.abs(im_non_nan - mean) >= threshold
-
-        images_without_outliers[outlier_mask] = max_pixel_val
-
-        # Clip value to 0-1
-        images_without_outliers /= max_pixel_val
-        images_without_outliers = np.interp(images_without_outliers, (images_without_outliers.min(),
-                                                                       images_without_outliers.max()), (0, 255))
-        return images_without_outliers
+        im_non_nan = np.interp(im_non_nan, (im_non_nan.min(), im_non_nan.max()), (0, 255))
+        # print('\npreprocess_raw done!\n')
+        # print('max pixel value: ', np.max(im_non_nan), 'min pixel value: ', np.min(im_non_nan), 'std: ', np.std(im_non_nan), 'mean: ', np.mean(im_non_nan))
+        return im_non_nan
     ############################################################################################################
 
     def __getitem__(self, index):
@@ -787,7 +773,8 @@ class LoadImagesAndLabels(Dataset):
             ######################################################################################
             ''' This is where we preprocess the image, the result is original matrix (black image)
                 which contains full scale of values'''
-            img = self.preprocess_raw(img)
+            img = self.preprocess_raw(img) # -> this preprocesses returns the image with values between 0-255
+            # print('\ndataloader.py max pixel value: ', np.max(img), 'min pixel value: ', np.min(img), 'std: ', np.std(img), 'mean: ', np.mean(img))
             ######################################################################################
 
             # Letterbox
@@ -904,7 +891,10 @@ class LoadImagesAndLabels(Dataset):
 
             # place img in img4
             if i == 0:  # top left
-                img4 = np.full((s * 2, s * 2, img.shape[2]), 114, dtype=np.uint8)  # base image with 4 tiles
+                ############################################################################################
+                # blank no pixels with 0
+                img4 = np.full((s * 2, s * 2, img.shape[2]), 0, dtype=np.float64)  # base image with 4 tiles
+                ############################################################################################
                 x1a, y1a, x2a, y2a = max(xc - w, 0), max(yc - h, 0), xc, yc  # xmin, ymin, xmax, ymax (large image)
                 x1b, y1b, x2b, y2b = w - (x2a - x1a), h - (y2a - y1a), w, h  # xmin, ymin, xmax, ymax (small image)
             elif i == 1:  # top right
@@ -940,15 +930,15 @@ class LoadImagesAndLabels(Dataset):
         '''
         # Augment
         # img4, labels4, segments4 = copy_paste(img4, labels4, segments4, p=self.hyp['copy_paste'])
-        # img4, labels4 = random_perspective(img4,
-        #                                    labels4,
-        #                                    segments4,
-        #                                    degrees=self.hyp['degrees'],
-        #                                    translate=self.hyp['translate'],
-        #                                    scale=self.hyp['scale'],
-        #                                    shear=self.hyp['shear'],
-        #                                    perspective=self.hyp['perspective'],
-        #                                    border=self.mosaic_border)  # border to remove
+        img4, labels4 = random_perspective(img4,
+                                           labels4,
+                                           segments4,
+                                           degrees=self.hyp['degrees'],
+                                           translate=self.hyp['translate'],
+                                           scale=self.hyp['scale'],
+                                           shear=self.hyp['shear'],
+                                           perspective=self.hyp['perspective'],
+                                           border=self.mosaic_border)  # border to remove
 
         return img4, labels4
 
@@ -968,7 +958,7 @@ class LoadImagesAndLabels(Dataset):
 
             # place img in img9
             if i == 0:  # center
-                img9 = np.full((s * 3, s * 3, img.shape[2]), 114, dtype=np.uint8)  # base image with 4 tiles
+                img9 = np.full((s * 3, s * 3, img.shape[2]), 0, dtype=np.uint8)  # base image with 4 tiles
                 h0, w0 = h, w
                 c = s, s, s + w, s + h  # xmin, ymin, xmax, ymax (base) coordinates
             elif i == 1:  # top

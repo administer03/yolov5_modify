@@ -307,7 +307,11 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
         for i, (imgs, targets, paths, _) in pbar:  # batch -------------------------------------------------------------
             callbacks.run('on_train_batch_start')
             ni = i + nb * epoch  # number integrated batches (since train start)
+            ###############################################################################################
+            # print("\ntrain.py = ", imgs.max(), imgs.min(), imgs.mean())
+            # print(imgs.shape)
             imgs = imgs.to(device, non_blocking=True).float() / 255  # uint8 to float32, 0-255 to 0.0-1.0
+            ###############################################################################################
 
             # Warmup
             if ni <= nw:
@@ -369,7 +373,6 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
                 # incase specific target channels
                 if transformed_img.shape[1] != 1 and transformed_img.shape[1] != 3:
                     print("\nWrong Target Channels, See more infomation in train.py (365)\n")
-                
                 callbacks.run('on_train_batch_end', model, ni, transformed_img, targets, paths, list(mloss), opt.target_ch)
                 ###########################################################################################################
                 if callbacks.stop_training:
@@ -451,9 +454,9 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
                 if f is best:
                     LOGGER.info(f'\nValidating {f}...')
                     results, _, _ = validate.run(
-                        data_dict,
+                        data_dict, # location of data train/val/test
                         batch_size=batch_size // WORLD_SIZE * 2,
-                        imgsz=imgsz,
+                        imgsz=imgsz, # images size
                         model=attempt_load(f, device).half(),
                         iou_thres=0.65 if is_coco else 0.60,  # best pycocotools at iou 0.65
                         single_cls=single_cls,
@@ -497,7 +500,7 @@ def parse_opt(known=False):
     parser = argparse.ArgumentParser()
     #######################################################################################################################
     parser.add_argument('--input-ch', type=int, default=7, help='input channels for CNN processing (multiview-extraction)')
-    parser.add_argument('--target-ch', type=int, default=3, help='target channels, that represent the input data for Yolo')
+    parser.add_argument('--target-ch', type=int, default=1, help='target channels, that represent the input data for Yolo')
     parser.add_argument('--sp-filters', type=int, default=0, help='0 means does not use a specific filter\
                         1 means use a ["Linear", "Sqrt", "Squared"], 2 means use a ["Log", "ASINH", "Sqrt"]\
                         and 3 means use a ["Power", "SINH", "Squared"]')
