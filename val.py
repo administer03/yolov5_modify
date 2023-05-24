@@ -367,11 +367,13 @@ def run(
 
 def parse_opt():
     parser = argparse.ArgumentParser()
-    ########################################################################################################
+    #######################################################################################################################
+    parser.add_argument('--input-ch', type=int, default=7, help='input channels for CNN processing (multiview-extraction)')
+    parser.add_argument('--target-ch', type=int, default=1, help='target channels, that represent the input data for Yolo')
     parser.add_argument('--sp-filters', type=int, default=0, help='0 means does not use a specific filter\
                         1 means use a ["Linear", "Sqrt", "Squared"], 2 means use a ["Log", "ASINH", "Sqrt"]\
                         and 3 means use a ["Power", "SINH", "Squared"]')
-    ########################################################################################################
+    #######################################################################################################################
     parser.add_argument('--data', type=str, default=ROOT / 'data/coco128.yaml', help='dataset.yaml path')
     parser.add_argument('--weights', nargs='+', type=str, default=ROOT / 'yolov5s.pt', help='model path(s)')
     parser.add_argument('--batch-size', type=int, default=32, help='batch size')

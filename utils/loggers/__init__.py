@@ -183,7 +183,7 @@ class Loggers():
                     log_tensorboard_graph(self.tb, model, imgsz=(self.opt.imgsz, self.opt.imgsz))
 
             # save batch train images when batch size reach No.round mod x
-            if (ni > 5) and (ni % 5000 == 0):
+            if (ni > 5) and (ni % 1600 == 0):
                 ######################################################
                 f = self.save_dir / f'train_batch{ni}.jpg'  # filename
                 plot_images(imgs, targets, paths, f)

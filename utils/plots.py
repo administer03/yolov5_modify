@@ -233,7 +233,12 @@ def plot_images(images, targets, paths=None, fname='images.jpg', names=None):
         images = images.cpu().float().numpy()
     if isinstance(targets, torch.Tensor):
         targets = targets.cpu().numpy()
-    
+    ##################################################################
+    '''handle with infinities values'''
+    images[images < 0] = 0.0
+    images = np.nan_to_num(images, nan=0.0, posinf=0.0, neginf=0.0)
+    images = np.interp(images, (images.min(), images.max()), (0, 255))
+    ##################################################################
     max_size = 1920  # max image size
     max_subplots = 16  # max image subplots, i.e. 4x4
     bs, _, h, w = images.shape  # batch size, _, height, width

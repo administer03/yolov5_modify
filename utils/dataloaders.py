@@ -36,13 +36,10 @@ from utils.general import (DATASETS_DIR, LOGGER, NUM_THREADS, TQDM_BAR_FORMAT, c
                            xywh2xyxy, xywhn2xyxy, xyxy2xywhn)
 from utils.torch_utils import torch_distributed_zero_first
 
-###
+################################################
 from astropy.visualization import ZScaleInterval
-<<<<<<< HEAD
 from copy import deepcopy
 ################################################
-=======
->>>>>>> 42922dc3c56023c072195b96546ed2b4221afa00
 
 # Parameters
 HELP_URL = 'See https://github.com/ultralytics/yolov5/wiki/Train-Custom-Data'
@@ -740,7 +737,8 @@ class LoadImagesAndLabels(Dataset):
     #     print('ran dataset iter')
     #     #self.shuffled_vector = np.random.permutation(self.nF) if self.augment else np.arange(self.nF)
     #     return self
-    ################
+
+    ############################################################################################################
     def preprocess_raw(self, im):
         if len(im.shape) == 2:
             im = np.expand_dims(im, axis=-1)
