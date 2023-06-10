@@ -775,6 +775,10 @@ class LoadImagesAndLabels(Dataset):
             ''' This is where we preprocess the image, the result is original matrix (black image)
                 which contains full scale of values'''
             img = self.preprocess_raw(img) # -> this preprocesses returns the image with values between 0-255
+            # export img to .export_npy/input_npy
+            img_name = self.im_files[index].split('/')[-1]
+            # print("original image shape: ", img.shape)
+            # np.save('./export_npy/input_npy/' + img_name, img)
             # print('\ndataloader.py max pixel value: ', np.max(img), 'min pixel value: ', np.min(img), 'std: ', np.std(img), 'mean: ', np.mean(img))
             ######################################################################################
 
@@ -834,6 +838,8 @@ class LoadImagesAndLabels(Dataset):
             img = self.relative_stack(img)
         else:
             img = self.stack_(img) # Stack image
+            # export image to ./export_npy
+            # np.save('./export_npy/7ch/' + img_name, img)
         # print(img.shape) --> the image channels will be equal input_ch
         #####################################################################################
 

@@ -1,19 +1,18 @@
 import os
 
 imgsize = 1024
-batch_size = 4
-data_ = "../running_data/linear_globular_dataset_ds9/data.yaml"
+batch_size = 8
+data_ = "../running_data/npy_dataset/data.yaml"
 task = "test"
 project_name = "./runs/val/test1"
-weight_ = "./runs/train/npy_version/augment/scratch_5n/weights/best.pt"
+weight_ = "./runs/train/npy_version/augment/scratch_5n/weights/last.pt"
 
 ## for testing
 
 os.system("python val.py --img {} \
---batch-size 8 \
+--batch-size {} \
 --data {} --task {} \
---input-ch 7 --target-ch 1 \
---weights ./runs/train/7_to_1_ch/cnn_s_pre/weights/last.pt \
---device 0 --exist-ok --single-cls \
---name val1 --project {}".format(imgsize, data_, task, project_name))
+--weights {} \
+--device 0 --exist-ok --single-cls --save-txt \
+--name val1 --project {}".format(imgsize, batch_size, data_, task, weight_, project_name))
           

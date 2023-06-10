@@ -35,7 +35,7 @@ except ImportError:
     thop = None
 
 ##########################################################################
-# Defination the structure
+'''                  Defination the YoDa structure              '''
 
 class YoDa(nn.Module):
     def __init__(self, input_ch, target_ch):
@@ -59,7 +59,7 @@ class YoDa(nn.Module):
             nn.Conv2d(inp_channel, inp_channel - 1, 1),
             nn.BatchNorm2d(inp_channel-1),
             nn.SiLU(),
-        ) # 1
+        )
     
     def forward(self, x):
         if self.input_ch == 7: # stacking all filters
@@ -71,8 +71,7 @@ class YoDa(nn.Module):
                 x = self.conv4(x)
             elif self.target_ch == 1:
                 # print("\n**running on CNN ({}ch target!)\n".format(self.target_ch))
-                # input_data = x
-                # print(input_data.shape) # represent (batch, channel, height, width)
+                # print(input_data.shape) # --> (batch, channel, height, width)
                 x = self.conv1(x)
                 x = self.conv2(x)
                 x = self.conv3(x)
@@ -249,7 +248,7 @@ class DetectionModel(BaseModel):
 
         # Define model
         ###############################################
-        # ch = self.yaml['ch'] = self.yaml.get('ch', ch)  # input channels
+        # ch = self.yaml['ch'] = self.yaml.get('ch', ch)  # input channelss
         ch = self.target_ch
         ###############################################
 
@@ -275,10 +274,11 @@ class DetectionModel(BaseModel):
             self.stride = m.stride
             self._initialize_biases()  # only run once
         
-        #########################################################
+        ###############################################
         # Initial the model
+        # print('\n\n init yoda \n\n')
         self.YoDa = YoDa(self.input_ch, self.target_ch)
-        #########################################################
+        ###############################################
 
         # Init weights, biases
         initialize_weights(self)

@@ -365,8 +365,25 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
                 ##########################################################################################################
                 # for specific input -> display
                 transformed_img = deepcopy(dcp_obj.detach().cpu().numpy())
+                # ******************************************************
+                # export transformed_img to export_npy
+                # file_name = paths[0].split('/')[-1].split('.')[0].split('/')[-1]
+                # print('transformed_img shape : ', transformed_img.shape)
+                # if output_channels == 1:
+                #     # convert transformed_img shape :  (1, 1, 1024, 1024) -> (1024, 1024, 1)
+                #     export_transformed_img = np.squeeze(transformed_img, axis=0)
+                #     export_transformed_img = np.transpose(export_transformed_img, (1, 2, 0))
+                    # print("after squeeze : ", export_transformed_img.shape)
+                # elif output_channels == 3:
+                #     raise NotImplementedError
+                #     print('\nDid\'t modify yet\n')
+                    # convert transformed_img shape :  (1, 3, 1024, 1024) -> (1024, 1024, 3)
+                    # export_transformed_img = np.squeeze(transformed_img, axis=0)
+                    # export_transformed_img = np.transpose(export_transformed_img, (1, 2, 0))
+                # np.save('./export_npy/YoDa/' + file_name, export_transformed_img)
                 # print('\n\nsh : {}\n\n'.format(transformed_img.shape)) -> (8, 1, 1024, 1024)
                 # print('\ndecode shp', transformed_img.shape) #-> (4, 3, 64, 64) (batch_sz, target_ch, height, width)
+                # ******************************************************
                 pbar.set_description(('%11s' * 2 + '%11.4g' * 5) %
                                      (f'{epoch}/{epochs - 1}', mem, *mloss, targets.shape[0], imgs.shape[-1]))
                 
@@ -596,9 +613,9 @@ def main(opt, callbacks=Callbacks()):
         dist.init_process_group(backend='nccl' if dist.is_nccl_available() else 'gloo')
 
     ################################################################
-    print("\n***********************************\
-          \ninput_ch_CNN : {}\ninput_ch_Yolo : {}\
-          \n".format(opt.input_ch, opt.target_ch))
+    print("\n╔════════════════════════╗\
+          \n║ input_ch_CNN : {} \t ║\n║ input_ch_Yolo : {} \t ║\
+        ".format(opt.input_ch, opt.target_ch))
     if opt.sp_filters > 0:
         print("Now procesing in specific stack filters!!!\n")
 
@@ -609,8 +626,8 @@ def main(opt, callbacks=Callbacks()):
         list_filter = ["Log", "ASINH", "Sqrt"]
     elif opt.sp_filters == 3:
         list_filter = ["Power", "SINH", "Squared"]
-    print("Special Filters : {}".format(list_filter))
-    print("***********************************")
+    print("║ Special Filters : {} ║".format(list_filter))
+    print("╚════════════════════════╝")
     ################################################################
 
     # Train
@@ -715,11 +732,11 @@ def main(opt, callbacks=Callbacks()):
                     f'Usage example: $ python train.py --hyp {evolve_yaml}')
     
     ################################################################
-    print("***********************************\
-          \ninput_ch_CNN : {}\ninput_ch_Yolo : {}\
-          \n".format(opt.input_ch, opt.target_ch))
+    print("\n╔════════════════════════╗\
+          \n║ input_ch_CNN : {} \t ║\n║ input_ch_Yolo : {} \t ║\
+        ".format(opt.input_ch, opt.target_ch))
     if opt.sp_filters > 0:
-        print("Processed with specific stack filters!!!\n")
+        print("Now procesing in specific stack filters!!!\n")
 
     list_filter = None
     if opt.sp_filters == 1:
@@ -728,8 +745,8 @@ def main(opt, callbacks=Callbacks()):
         list_filter = ["Log", "ASINH", "Sqrt"]
     elif opt.sp_filters == 3:
         list_filter = ["Power", "SINH", "Squared"]
-    print("Special Filters : {}".format(list_filter))
-    print("***********************************")
+    print("║ Special Filters : {} ║".format(list_filter))
+    print("╚════════════════════════╝")
     ################################################################
 
 def run(**kwargs):
