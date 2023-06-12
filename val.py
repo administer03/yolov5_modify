@@ -225,7 +225,11 @@ def run(
         with dt[1]:
             # print('d[1]')
             #######################################################################################################################################
-            (preds, train_out), transformed_img = model(im, get_dcp_img=True) if compute_loss else (model(im, augment=augment, get_dcp_img=True), None)
+            if compute_loss:
+                (preds, train_out), transformed_img = model(im, get_dcp_img=True)
+            else:
+                (preds, train_out), transformed_img = model(im, augment=augment, get_dcp_img=True)
+            # print(type(transformed_img)) # -> <class 'torch.Tensor'>
             # transformed_img = deepcopy(transformed_img.cpu().detach().numpy())
             #######################################################################################################################################
         

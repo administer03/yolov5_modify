@@ -5,7 +5,7 @@ batch_size = 8
 data_ = "../running_data/npy_dataset/data.yaml"
 task = "test"
 project_name = "./runs/val/test1"
-weight_ = "./runs/train/npy_version/augment/scratch_5n/weights/last.pt"
+weight_ = "./runs/train/npy_version/augment/scratch_5s/weights/last.pt"
 
 ## for testing
 
