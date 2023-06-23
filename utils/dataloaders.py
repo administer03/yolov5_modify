@@ -273,9 +273,14 @@ class LoadImages:
         videos = [x for x in files if x.split('.')[-1].lower() in VID_FORMATS]
         ni, nv = len(images), len(videos)
 
+        ######################################
+        self.z = ZScaleInterval(n_samples=600)
+        ######################################
+        
         self.img_size = img_size
         self.stride = stride
         self.files = images + videos
+        print('files', self.files)
         self.nf = ni + nv  # number of files
         self.video_flag = [False] * ni + [True] * nv
         self.mode = 'image'
@@ -288,6 +293,64 @@ class LoadImages:
             self.cap = None
         assert self.nf > 0, f'No images or videos found in {p}. ' \
                             f'Supported formats are:\nimages: {IMG_FORMATS}\nvideos: {VID_FORMATS}'
+
+    ############################################################################################################
+    def preprocess_raw(self, im):
+        if len(im.shape) == 2:
+            im = np.expand_dims(im, axis=-1)
+
+        im_non_nan = deepcopy(im)
+
+        im_non_nan[im_non_nan < 0] = 0.0
+        im_non_nan = np.nan_to_num(im_non_nan, nan=0.0, posinf=0.0, neginf=0.0)
+
+        im_non_nan = np.interp(im_non_nan, (im_non_nan.min(), im_non_nan.max()), (0, 255))
+        # print('\npreprocess_raw done!\n')
+        # print('max pixel value: ', np.max(im_non_nan), 'min pixel value: ', np.min(im_non_nan), 'std: ', np.std(im_non_nan), 'mean: ', np.mean(im_non_nan))
+        return im_non_nan
+
+    #########################################################################################
+    def apply_filter(self, im, fil): # Apply particular filter to image
+        im = np.interp(im, (im.min(), im.max()), (0, 1))
+        # print(im.min(), im.max())
+        filter_name = fil
+        if filter_name == "Linear":
+            im = im
+        elif filter_name == "Log":
+            e = np.exp(-10 * im)
+            im = (e - 1) / (np.exp(-10) - 1)
+        elif filter_name == "Power":
+            # print('\n',im.min(), im.max())
+            im = (np.power(1000, im) - 1) / 1000.0
+        elif filter_name == "Sqrt":
+            # fil < 0 with 0
+            im[im < 0] = 0.0
+            im = np.sqrt(im)
+        elif filter_name == "Squared":
+            im = im**2
+        elif filter_name == "ASINH":
+            im = (np.arcsinh(10*im)) / 3
+        elif filter_name == "SINH":
+            im = (np.sinh(3*im)) / 10
+        else:
+            print("No filter applied")
+
+        im = self.z(im) # -> return values between 0 and 1
+        # normalize image back to 0-255
+        im = im * 255
+        # print("max: ", im.max(), "min: ", im.min(), "mean: ", im.mean(), "std: ", im.std())
+        return im
+
+    def stack_(self, img):
+        # Stack images
+        list_filter = ["Linear", "Log", "Power", "Sqrt", "Squared", "ASINH", "SINH"]
+        img_7ch = np.zeros(shape=(img.shape[0], img.shape[1], 7))
+        original_img = deepcopy(img)
+        for i in range(len(list_filter)):
+            filtered_img = self.apply_filter(original_img, list_filter[i])
+            img_7ch[:, :, i] = filtered_img
+        return img_7ch
+    ############################################################################################################
 
     def __iter__(self):
         self.count = 0
@@ -320,7 +383,17 @@ class LoadImages:
         else:
             # Read image
             self.count += 1
-            im0 = cv2.imread(path)  # BGR
+            # im0 = cv2.imread(path)  # BGR
+            ###################################
+            # load numpy instead of cv2
+            im0 = np.load(path)
+            im0 = im0.astype(np.float64)
+            im0 = np.expand_dims(im0 ,axis=-1) # (1024, 1024) -> (1024, 1024, 1)
+            # print(im0.shape)
+            # print stat of im0
+            # print('\nmax pixel value: ', np.max(im0), 'min pixel value: ', np.min(im0), 'std: ', np.std(im0), 'mean: ', np.mean(im0))
+            im0 = self.preprocess_raw(im0) # -> this preprocesses returns the image with values between 0-255
+            ###################################
             assert im0 is not None, f'Image Not Found {path}'
             s = f'image {self.count}/{self.nf} {path}: '
 
@@ -328,6 +401,12 @@ class LoadImages:
             im = self.transforms(im0)  # transforms
         else:
             im = letterbox(im0, self.img_size, stride=self.stride, auto=self.auto)[0]  # padded resize
+            ################################
+            # stacking filters
+            im = self.stack_(im) # Stack image
+            # print(im.shape)
+            # im = np.expand_dims(im, axis=-1)
+            ################################
             im = im.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB
             im = np.ascontiguousarray(im)  # contiguous
 

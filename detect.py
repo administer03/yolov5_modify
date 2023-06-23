@@ -35,6 +35,7 @@ import sys
 from pathlib import Path
 
 import torch
+import glob
 
 FILE = Path(__file__).resolve()
 ROOT = FILE.parents[0]  # YOLOv5 root directory
@@ -108,15 +109,26 @@ def run(
     elif screenshot:
         dataset = LoadScreenshots(source, img_size=imgsz, stride=stride, auto=pt)
     else:
+        print('source', source)
         dataset = LoadImages(source, img_size=imgsz, stride=stride, auto=pt, vid_stride=vid_stride)
     vid_path, vid_writer = [None] * bs, [None] * bs
 
     # Run inference
-    model.warmup(imgsz=(1 if pt or model.triton else bs, 3, *imgsz))  # warmup
+    # model.warmup(imgsz=(1 if pt or model.triton else bs, 3, *imgsz))  # warmup
+    ##############################################################################
+    try:
+        model.warmup(imgsz=(1 if pt or model.triton else bs, 3, *imgsz))  # warmup
+    except:
+        model.warmup(imgsz=(1 if pt or model.triton else bs, 1, *imgsz))  # warmup
+    ##############################################################################
     seen, windows, dt = 0, [], (Profile(), Profile(), Profile())
     for path, im, im0s, vid_cap, s in dataset:
         with dt[0]:
-            im = torch.from_numpy(im).to(model.device)
+            # im = torch.from_numpy(im).to(model.device)
+            ###############################################
+            im_copy = im.copy()
+            im = torch.from_numpy(im_copy).to(model.device)
+            ###############################################
             im = im.half() if model.fp16 else im.float()  # uint8 to fp16/32
             im /= 255  # 0 - 255 to 0.0 - 1.0
             if len(im.shape) == 3:
@@ -125,7 +137,10 @@ def run(
         # Inference
         with dt[1]:
             visualize = increment_path(save_dir / Path(path).stem, mkdir=True) if visualize else False
-            pred = model(im, augment=augment, visualize=visualize)
+            # pred = model(im, augment=augment, visualize=visualize)
+            ######################################################################################################
+            (pred, train_out), transformed_img = model(im, augment=augment, get_dcp_img=True, visualize=visualize)
+            ######################################################################################################
 
         # NMS
         with dt[2]:
@@ -172,7 +187,11 @@ def run(
                         label = None if hide_labels else (names[c] if hide_conf else f'{names[c]} {conf:.2f}')
                         annotator.box_label(xyxy, label, color=colors(c, True))
                     if save_crop:
-                        save_one_box(xyxy, imc, file=save_dir / 'crops' / names[c] / f'{p.stem}.jpg', BGR=True)
+                        # save_one_box(xyxy, imc, file=save_dir / 'crops' / names[c] / f'{p.stem}.jpg', BGR=True)
+                        ######################################################################################################
+                        # save .npy instead of .jpg
+                        save_one_box(xyxy, imc, file=save_dir / 'crops' / names[c] / f'{p.stem}.npy', BGR=True)
+                        ######################################################################################################
 
             # Stream results
             im0 = annotator.result()
