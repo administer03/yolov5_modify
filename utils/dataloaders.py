@@ -43,10 +43,10 @@ from copy import deepcopy
 
 # Parameters
 HELP_URL = 'See https://github.com/ultralytics/yolov5/wiki/Train-Custom-Data'
-##############################################################################################################
+#######################################################################################################################
 IMG_FORMATS = 'bmp', 'dng', 'jpeg', 'jpg', 'mpo', 'png', 'tif', 'tiff', 'webp', 'pfm', 'npy'  # include image suffixes
-########
 VID_FORMATS = 'asf', 'avi', 'gif', 'm4v', 'mkv', 'mov', 'mp4', 'mpeg', 'mpg', 'ts', 'wmv'  # include video suffixes
+#######################################################################################################################
 LOCAL_RANK = int(os.getenv('LOCAL_RANK', -1))  # https://pytorch.org/docs/stable/elastic/run.html
 RANK = int(os.getenv('RANK', -1))
 PIN_MEMORY = str(os.getenv('PIN_MEMORY', True)).lower() == 'true'  # global pin_memory for dataloaders
@@ -280,7 +280,7 @@ class LoadImages:
         self.img_size = img_size
         self.stride = stride
         self.files = images + videos
-        print('files', self.files)
+        print(f'Load sub-images: {len(images)} image files, {len(videos)} video files')
         self.nf = ni + nv  # number of files
         self.video_flag = [False] * ni + [True] * nv
         self.mode = 'image'
